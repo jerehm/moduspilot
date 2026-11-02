@@ -43,9 +43,9 @@ export default function StatsSection() {
           <div className="relative rounded-2xl border border-border overflow-hidden shadow-[0_24px_60px_-24px_rgba(30,20,60,0.30)]">
             <Image
               src="/screenshot-briefing.png"
-              alt="Modus daily briefing, your priorities, habits and inbox in one place"
-              width={1200}
-              height={900}
+              alt="Modus morning briefing with today's priorities and tasks in one place"
+              width={2560}
+              height={1180}
               className="w-full h-auto"
             />
           </div>
