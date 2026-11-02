@@ -1051,7 +1051,7 @@ export async function POST(req: Request) {
         // the response stream — the client would hang instead of seeing the error.
         await closeStreamData();
       },
-      onFinish: async ({ text, usage, finishReason }) => {
+      onFinish: async ({ text, usage, finishReason, steps }) => {
         // 🚨 An empty answer used to be INVISIBLE here. The route logged a 200,
         // the timing line looked healthy, and nothing recorded that zero
         // characters reached the user — so the blank bubble could only ever be
@@ -1061,9 +1061,18 @@ export async function POST(req: Request) {
         // provider genuinely returned nothing). Log it whenever the user got
         // nothing, at error level, naming the model that owed them an answer.
         if (!text || text.trim() === '') {
+          // finishReason=unknown is the SDK's catch-all: Google sent a reason this
+          // pinned SDK cannot name, or the stream ended with no finish chunk. Which
+          // step died and what it called is the only way to tell them apart
+          // (10-30: two of these on gemini-3.8-flash with 11 MCP tools, not
+          // reproducible without tool calls).
+          const stepTrail = (steps ?? [])
+            .map(s => `${s.finishReason}[${s.toolCalls.map(c => c.toolName).join(',')}]`)
+            .join(' > ');
           console.error(
             `[chat] EMPTY ANSWER: finishReason=${finishReason} model=${servedModelId} ` +
-            `tools=${Object.keys(mcpTools).length} tokens=${usage?.completionTokens ?? '?'} uid=${uid ?? 'guest'}`,
+            `tools=${Object.keys(mcpTools).length} tokens=${usage?.completionTokens ?? '?'} uid=${uid ?? 'guest'} ` +
+            `steps=${steps?.length ?? 0} trail=${stepTrail || 'none'}`,
           );
         } else {
           console.log(`[chat] finish: reason=${finishReason} chars=${text.length} model=${servedModelId}`);

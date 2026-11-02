@@ -379,6 +379,12 @@ export default function ChatWindow({
 
   const { messages, input, handleInputChange, append, isLoading, setInput, setMessages, stop, reload } = useChat({
     api: '/api/chat',
+    // Unthrottled, every token is a synchronous store update under React 19, and
+    // the [messages] effects below each queue another. A fast burst of tokens
+    // crossed React's 50 nested update limit and crashed the chat (React #185,
+    // seen on Safari after the Next 16 upgrade). Batching to one update per 50ms
+    // is the SDK's own remedy and is invisible at reading speed.
+    experimental_throttle: 50,
     onResponse: (response) => {
       // Capture the model that will answer this message + whether Auto chose it.
       const routedModelId = response.headers.get('x-modus-model') || '';

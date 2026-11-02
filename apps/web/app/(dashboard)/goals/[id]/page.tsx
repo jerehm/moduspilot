@@ -358,6 +358,8 @@ function GoalDetailPageContent() {
 
   const { messages, input, handleInputChange, append, isLoading, setInput, setMessages, stop } = useChat({
     api: '/api/chat',
+    // See ChatWindow: per-token updates hit React #185 under React 19.
+    experimental_throttle: 50,
     initialMessages: [],
     id: `goal-${id}`,
     headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,

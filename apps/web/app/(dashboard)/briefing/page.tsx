@@ -1295,6 +1295,8 @@ function BriefingContent({ briefing, onEnergySelect, settings, saveMessages, aut
 
   const { messages, input, handleInputChange, append, isLoading, setInput, setMessages } = useChat({
     api: '/api/chat', initialMessages, id: briefing.id,
+    // See ChatWindow: per-token updates hit React #185 under React 19.
+    experimental_throttle: 50,
     headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
     body: {
       personalContext: settings.personalContext ?? '', responseStyle: settings.responseStyle ?? 'normal',
