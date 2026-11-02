@@ -36,6 +36,9 @@ export default function TaskList() {
     );
     const unsub = onSnapshot(q, snap => {
       setTasks(snap.docs
+        // Soft-deleted tasks keep their doc with deleted: true; every other
+        // task surface hides them, so the dashboard must too.
+        .filter(d => d.data().deleted !== true)
         .map(d => ({
           id: d.id,
           title: d.data().title ?? 'Untitled',
