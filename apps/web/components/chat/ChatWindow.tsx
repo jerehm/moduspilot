@@ -9,7 +9,7 @@ import Image from 'next/image';
 import type { Message } from 'ai';
 import { auth } from '@/lib/firebase';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { modelName, unlockedModels } from '@/lib/models';
+import { modelName, unlockedModels, canonicalModelId, FREE_DEFAULT } from '@/lib/models';
 import { isAwaitingAssistantText } from '@/lib/chat/pending';
 import { readWebSearchAnnotation, readAttachmentsAnnotation } from '@/lib/chat/annotations';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -295,6 +295,12 @@ export default function ChatWindow({
   // The per-send body (attachments, model choice, …) of the last turn, so an
   // auto-retry re-sends the SAME request rather than a bare regenerate.
   const lastSendBodyRef = useRef<Record<string, unknown> | null>(null);
+  // Set when the empty-answer retry hands the turn to FREE_DEFAULT. onResponse
+  // shows it in place of clearing the notice, so the swap is never silent.
+  const fallbackNoticeRef = useRef<string | null>(null);
+  // True between useChat's onFinish and the just-finished effect that reads it.
+  const streamCompletedRef = useRef(false);
+  const finishedWebSearchRef = useRef(false);
   // Files a just-sent message introduced, waiting to be stamped onto that message
   // as a modusAttachments annotation once it appears in `messages`. Applied by an
   // effect (not synchronously at send) because the SDK rebuilds `messages` while
@@ -386,6 +392,9 @@ export default function ChatWindow({
     // is the SDK's own remedy and is invisible at reading speed.
     experimental_throttle: 50,
     onResponse: (response) => {
+      // Read once and clear, so it belongs to this response only.
+      const fallbackNotice = fallbackNoticeRef.current;
+      fallbackNoticeRef.current = null;
       // Capture the model that will answer this message + whether Auto chose it.
       const routedModelId = response.headers.get('x-modus-model') || '';
       const auto = response.headers.get('x-modus-auto') === '1';
@@ -418,7 +427,7 @@ export default function ChatWindow({
           setModelNotice(`${label} is temporarily unavailable, answered with the fast default model instead.`);
         }
       } else {
-        setModelNotice(null);
+        setModelNotice(fallbackNotice);
       }
     },
     initialMessages,
@@ -432,7 +441,14 @@ export default function ChatWindow({
       briefingHour: briefingHour ?? 7,
       briefingTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || briefingTimezone || 'UTC',
     },
+    onFinish: (message) => {
+      streamCompletedRef.current = true;
+      // An empty answer is never added to `messages`, but this copy of it still
+      // carries the annotations, which is where web search is recorded.
+      finishedWebSearchRef.current = readWebSearchAnnotation(message) > 0;
+    },
     onError: (err) => {
+      fallbackNoticeRef.current = null;
       const msg = (err?.message ?? '').toLowerCase();
       if (msg.includes('authentication_required')) {
         // With per-send fresh tokens (F1) a signed-in user should effectively
@@ -725,11 +741,19 @@ export default function ChatWindow({
     // it (content filter, a reasoning model that spent its whole token budget, a
     // provider hiccup). Tell the user and let them retry — never leave it empty.
     const last = messages[messages.length - 1];
-    if (last?.role === 'assistant') {
+    // A stream that completes with NO frames never creates an assistant message,
+    // so the last message is still the user's and the check below never ran: no
+    // answer, no error, no retry, just silence. onFinish only fires on a normal
+    // completion (never on stop or error), so it marks that case apart from a
+    // turn the user or the watchdog cut short.
+    const completed = streamCompletedRef.current;
+    streamCompletedRef.current = false;
+    const silentEmpty = completed && last?.role === 'user';
+    if (last?.role === 'assistant' || silentEmpty) {
       // Same reader MessageBubble uses — see extractTextContent. Reading this
       // field two different ways is how a rendered answer could still be called
       // empty.
-      const text = extractTextContent(last.content);
+      const text = last.role === 'assistant' ? extractTextContent(last.content) : '';
       // Must list every block type MessageBubble can render — a reply that is
       // ONLY a block (no prose) would otherwise trip the empty-response error.
       const hasBlock = /```(approval|draft_options|options|image|document|chart)/.test(text);
@@ -750,8 +774,20 @@ export default function ChatWindow({
         if (emptyRetriedForRef.current !== turnKey) {
           emptyRetriedForRef.current = turnKey;
           setChatError(null);
+          // Retry on FREE_DEFAULT, not the model that just came back empty. A
+          // same-model resend failed twice in a row on 10-30 (gemini-3.8-flash),
+          // and switching to Flash Lite by hand is what got that user an answer.
+          // Every plan can run it, and the explicit pick skips the Auto router,
+          // so web search is carried over from the failed turn rather than lost.
+          const failed = routedRef.current?.modelId;
+          const body = { ...(lastSendBodyRef.current ?? {}) };
+          if (failed && canonicalModelId(failed) !== FREE_DEFAULT) {
+            body.modelChoice = FREE_DEFAULT;
+            if (finishedWebSearchRef.current) body.webSearch = true;
+            fallbackNoticeRef.current = `${modelName(failed)} returned an empty answer, ${modelName(FREE_DEFAULT)} answered instead.`;
+          }
           void (async () => {
-            reload({ headers: await authedHeaders(), body: lastSendBodyRef.current ?? undefined });
+            reload({ headers: await authedHeaders(), body });
           })();
           return;
         }

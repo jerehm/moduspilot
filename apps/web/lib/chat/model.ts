@@ -3,7 +3,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createXai } from '@ai-sdk/xai';
 import type { LanguageModel } from 'ai';
-import { canonicalModelId, isModelUnlocked, canUseModel, modelSupportsVision, PLATFORM_MODELS } from '@/lib/models';
+import { canonicalModelId, isModelUnlocked, canUseModel, modelSupportsVision, PLATFORM_MODELS, FREE_DEFAULT } from '@/lib/models';
 import { repairReasoningStream } from '@/lib/chat/stream-repair';
 import { isOpenAIGptReasoning } from '@/lib/chat/model-params';
 import { anthropicEffortForBudget } from '@/lib/chat/effort';
@@ -203,7 +203,7 @@ function anthropicProvider(apiKey: string) {
  * ⚠️ This id is the free tier's ONLY model. Changing it changes what a stranger
  * meets first AND what that costs per signup — re-run scripts/verify-model-cost.ts.
  */
-export const FREE_DEFAULT = 'gemini-3.5-flash-lite';
+export { FREE_DEFAULT };
 /** The failover chain's free link. Still Gateway-hosted, still selectable. */
 export const LLAMA_FALLBACK = 'meta/llama-3.3-70b';
 /**

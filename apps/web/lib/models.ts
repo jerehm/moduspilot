@@ -181,6 +181,13 @@ const LEGACY_MODEL_IDS: Record<string, string> = {
   'llama-3.1-8b-instant': 'meta/llama-3.1-8b',
 };
 
+/**
+ * The free tier's only default model, and the one every plan can run. Lives here
+ * rather than lib/chat/model.ts (which re-exports it) because the chat client
+ * needs it too, and that file pulls in the server provider SDKs.
+ */
+export const FREE_DEFAULT = 'gemini-3.5-flash-lite';
+
 /** Map a stored/legacy model id onto the catalog id that should actually serve it. */
 export function canonicalModelId(id: string): string {
   return LEGACY_MODEL_IDS[id] ?? id;
