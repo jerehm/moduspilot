@@ -1150,7 +1150,10 @@ export default function ChatWindow({
               three children stranded Regenerate in the middle of the bar. */}
           <div className="flex items-center gap-3 shrink-0">
             <button
-              onClick={async () => { setChatError(null); reload({ headers: await authedHeaders() }); }}
+              // Resend the failed turn's OWN body. A bare reload dropped the picked
+              // model, web search and the attached file text, so regenerating a
+              // question about a file answered without the file (11-02 round 2).
+              onClick={async () => { setChatError(null); reload({ headers: await authedHeaders(), ...(lastSendBodyRef.current ? { body: lastSendBodyRef.current } : {}) }); }}
               className="text-red-400 hover:text-red-300 text-sm font-medium"
             >
               Regenerate

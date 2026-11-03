@@ -253,10 +253,13 @@ export async function* streamChat(
     let timer: ReturnType<typeof setTimeout> | undefined;
     const stalled = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        reader.cancel().catch(() => {});
+        // Reject BEFORE cancelling: cancel() ends the pending read as `done`,
+        // and if that won the race the stall would pass as a normal finish
+        // (caught by the node harness, 11-03).
         const e = new Error('response_stalled');
         e.name = 'StallError';
         reject(e);
+        reader.cancel().catch(() => {});
       }, STALL_MS);
     });
     let result: ReadableStreamReadResult<Uint8Array>;

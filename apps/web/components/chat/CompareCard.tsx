@@ -179,13 +179,17 @@ export default function CompareCard({
     const ctrl = new AbortController();
     abortRef.current.push(ctrl);
     const t0 = performance.now();
+    // The stall cap covers waiting for the response too, not only the body:
+    // a request that never gets headers would otherwise shimmer forever.
+    let stalledBeforeResponse = false;
+    const headerTimer = setTimeout(() => { stalledBeforeResponse = true; ctrl.abort(); }, 45000);
     try {
       const res = await fetch('/api/chat/compare', {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: finalPrompt, model: modelId }),
         signal: ctrl.signal,
-      });
+      }).finally(() => clearTimeout(headerTimer));
 
       if (!res.ok || !res.body) {
         const msg = await res.json().catch(() => ({})) as { error?: string };
@@ -197,17 +201,43 @@ export default function CompareCard({
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let acc = '';
+      // 🚨 A column could shimmer FOREVER. ColumnBody shows the skeleton whenever
+      // text is empty, and a text stream swallows a mid-stream provider error, so
+      // a model that died, hung or answered nothing looked identical to one still
+      // thinking (11-02 round 2 audit). Inactivity cap per column (same 45s as
+      // chat), and an empty finish is an error the column says out loud.
+      const STALL_MS = 45000;
       for (;;) {
-        const { done, value } = await reader.read();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const stalled = new Promise<'stalled'>(r => { timer = setTimeout(() => r('stalled'), STALL_MS); });
+        const next = await Promise.race([reader.read(), stalled]).finally(() => clearTimeout(timer));
+        if (next === 'stalled') {
+          setColumns(c => c.map((col, i) => (i === index
+            ? { ...col, status: 'error', error: acc.trim() ? 'This model stalled partway through its answer. Try again.' : 'This model stalled. Try again.' } : col)));
+          ctrl.abort();
+          return;
+        }
+        const { done, value } = next;
         if (done) break;
         acc += decoder.decode(value, { stream: true });
         // Snapshot into the closure-free updater so columns never clobber each other.
         setColumns(c => c.map((col, i) => (i === index ? { ...col, text: acc } : col)));
       }
+      if (!acc.trim()) {
+        setColumns(c => c.map((col, i) => (i === index
+          ? { ...col, status: 'error', error: 'This model returned an empty answer.' } : col)));
+        return;
+      }
       setColumns(c => c.map((col, i) => (i === index
         ? { ...col, status: 'done', ms: Math.round(performance.now() - t0) } : col)));
     } catch (err) {
-      if ((err as Error)?.name === 'AbortError') return;
+      if ((err as Error)?.name === 'AbortError') {
+        if (stalledBeforeResponse) {
+          setColumns(c => c.map((col, i) => (i === index
+            ? { ...col, status: 'error', error: 'This model stalled. Try again.' } : col)));
+        }
+        return;
+      }
       setColumns(c => c.map((col, i) => (i === index
         ? { ...col, status: 'error', error: 'Could not reach this model.' } : col)));
     }

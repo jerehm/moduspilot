@@ -686,8 +686,8 @@ export function createFallbackModel(
      */
     silentBackup?: LM;
     /**
-     * The streamText maxSteps. On that step, tools are switched off (toolChoice
-     * none) so a tool loop has to END IN TEXT. Otherwise a turn that spends all
+     * The streamText maxSteps. On that step the call becomes a plain text turn
+     * (finalTextStep) so a tool loop has to END IN TEXT. Otherwise a turn that spends all
      * 5 steps calling tools finishes on a tool call and the user sees a blank
      * bubble. streamText in the pinned ai@4.3.19 has no prepareStep, but every
      * step is its own doStream call through here, so this is where to count.
@@ -727,7 +727,7 @@ export function createFallbackModel(
           step++;
           let options = callOptions;
           if (opts.maxSteps && step >= opts.maxSteps && options.mode.type === 'regular' && options.mode.tools?.length) {
-            options = { ...options, mode: { ...options.mode, toolChoice: { type: 'none' } } };
+            options = finalTextStep(options);
           }
           const out = await attempt((m) => m.doStream(options));
           const backup = opts.silentBackup;
@@ -792,6 +792,56 @@ export function backgroundModel(gatewayModelId: string, label: string): LM {
     onFallback: (from, to, err) =>
       console.warn(`[${label}] failover: ${from}→${to} (${String(err).slice(0, 120)})`),
   });
+}
+
+type CallOptions = Parameters<LM['doStream']>[0];
+type PromptMessage = CallOptions['prompt'][number];
+
+/**
+ * 🚨 THE LAST STEP OF A TOOL LOOP MUST BE A PLAIN TEXT TURN, ON EVERY PROVIDER.
+ *
+ * Reproduced 11-03 on prod and against both APIs directly: a prompt that makes
+ * the model call a tool once per step uses all 5 steps and ends on a tool call,
+ * so the user gets a blank bubble. `toolChoice: none` does NOT fix it: Gemini
+ * 3.x ignores functionCallingConfig NONE and calls the tool anyway, and Claude
+ * with its tools dropped returns an empty stop (which the silent swap then hands
+ * to Flash Lite, which is Gemini, which calls the tool again).
+ *
+ * So on that step: no tools declared at all, earlier tool calls and results
+ * rewritten as plain text (no provider rejects that, unlike tool parts with no
+ * declarations), reasoning parts dropped (their signatures belong to tool turns),
+ * and one closing instruction to answer from what was gathered.
+ */
+export function finalTextStep(options: CallOptions): CallOptions {
+  const out: PromptMessage[] = [];
+  const push = (m: PromptMessage) => {
+    const last = out[out.length - 1];
+    // Merge same-role neighbours: tool results become user text, and some
+    // providers reject two user (or two assistant) messages in a row.
+    if (last && last.role === m.role && (m.role === 'user' || m.role === 'assistant')) {
+      (last.content as unknown[]).push(...(m.content as unknown[]));
+      return;
+    }
+    out.push(m);
+  };
+  const clip = (v: unknown) => { const t = typeof v === 'string' ? v : JSON.stringify(v); return (t ?? '').slice(0, 4000); };
+  for (const m of options.prompt) {
+    if (m.role === 'assistant') {
+      const parts = m.content.flatMap(p => {
+        if (p.type === 'text') return p.text ? [{ type: 'text' as const, text: p.text }] : [];
+        if (p.type === 'tool-call') return [{ type: 'text' as const, text: `[I called ${p.toolName} with ${clip(p.args)}]` }];
+        return [];
+      });
+      if (parts.length) push({ role: 'assistant', content: parts });
+    } else if (m.role === 'tool') {
+      const parts = m.content.map(p => ({ type: 'text' as const, text: `Result of ${p.toolName}: ${clip(p.result)}` }));
+      if (parts.length) push({ role: 'user', content: parts });
+    } else {
+      push({ ...m, content: Array.isArray(m.content) ? [...m.content] : m.content } as PromptMessage);
+    }
+  }
+  push({ role: 'user', content: [{ type: 'text', text: 'You have used all the tool calls available for this answer. Do not call any tools. Using only the results above, write the complete final answer to my request now. If something could not be looked up, say so briefly.' }] });
+  return { ...options, prompt: out, mode: { type: 'regular' } };
 }
 
 type StreamPart = Awaited<ReturnType<LM['doStream']>>['stream'] extends ReadableStream<infer P> ? P : never;
