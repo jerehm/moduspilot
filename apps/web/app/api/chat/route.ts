@@ -63,10 +63,14 @@ import {
 // This route streams LLM output and does Firebase-admin/crypto work → Node
 // runtime, not Edge. Without an explicit maxDuration, Vercel applies a short
 // default and KILLS the function mid-stream on slower premium/reasoning models —
-// which the user experiences as the chat freezing with no answer. 60s is the
-// safe ceiling across Vercel tiers.
+// which the user experiences as the chat freezing with no answer. The team is on
+// Pro with Fluid compute, so 300s is the project's own default ceiling. 60s was
+// too short: 3 prod kills (last 10-28) were Opus 5.5 with 11 MCP tools running
+// up to 5 tool steps, a live stream that simply needed longer. Fluid bills
+// active CPU, so time spent waiting on the provider costs almost nothing. The
+// client's 45s STALL watchdog still ends a turn that has truly gone silent.
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   // Time-to-first-token is the whole complaint this instrumentation exists for

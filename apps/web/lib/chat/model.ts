@@ -176,7 +176,48 @@ export function rewriteGeminiSignatureBody(body: Record<string, unknown>): Recor
 
 /** Google provider. Use this, not bare createGoogleGenerativeAI. */
 function googleProvider(apiKey: string) {
-  return createGoogleGenerativeAI({ apiKey, fetch: jsonBodyFetch(rewriteGeminiSignatureBody) });
+  return createGoogleGenerativeAI({ apiKey, fetch: tapGeminiStream(jsonBodyFetch(rewriteGeminiSignatureBody)) });
+}
+
+/**
+ * 🔎 Records what Google ACTUALLY sent when a stream ends with no finishReason.
+ *
+ * 10-30, twice in 15s: `EMPTY ANSWER finishReason=unknown tokens=NaN` on
+ * gemini-3.8-flash with 11 MCP tools, ~5s in, no streamText onError. In the
+ * pinned @ai-sdk/google@1.2.22 those are the stream's INITIAL values: they
+ * survive only if no chunk carried usageMetadata or a candidate finishReason,
+ * and no chunk failed to parse (that would have hit onError). So Google sent a
+ * stream that parsed and said nothing. 4 repro runs on the same account (11-02)
+ * came back clean, so this logs the raw tail instead of guessing next time.
+ * Passes every byte through unchanged. Only streaming calls are tapped.
+ */
+function tapGeminiStream(inner: typeof fetch): typeof fetch {
+  return async (input, init) => {
+    const res = await inner(input, init);
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (!res.body || !url.includes('streamGenerateContent')) return res;
+    const decoder = new TextDecoder();
+    let bytes = 0;
+    let tail = '';
+    let sawFinish = false;
+    const tap = new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        bytes += chunk.byteLength;
+        tail = (tail + decoder.decode(chunk, { stream: true })).slice(-1500);
+        if (!sawFinish && tail.includes('"finishReason"')) sawFinish = true;
+        controller.enqueue(chunk);
+      },
+      flush() {
+        if (sawFinish) return;
+        const model = url.match(/models\/([^:]+):/)?.[1] ?? '?';
+        console.error(
+          `[gemini] stream ended with NO finishReason: model=${model} status=${res.status} bytes=${bytes} ` +
+          `tail=${JSON.stringify(tail.replace(/\s+/g, ' ').slice(-800))}`,
+        );
+      },
+    });
+    return new Response(res.body.pipeThrough(tap), { status: res.status, statusText: res.statusText, headers: res.headers });
+  };
 }
 
 /** Anthropic provider for a model id the user picked. Use this, not bare createAnthropic. */
