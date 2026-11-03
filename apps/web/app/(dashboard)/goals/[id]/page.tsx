@@ -11,6 +11,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useUserSettings } from '@/hooks/useUserSettings';
 import { useChat } from 'ai/react';
+import { useChatSafety, useChatSafetyWatch } from '@/hooks/useChatSafety';
 import { isAwaitingAssistantText } from '@/lib/chat/pending';
 import type { Message } from 'ai';
 import MessageBubble from '@/components/chat/MessageBubble';
@@ -356,13 +357,15 @@ function GoalDetailPageContent() {
     } catch { setChatError('Could not save this conversation. Keep this page open and retry when your connection returns.'); }
   }, [user, id, goal, modelChoice]);
 
-  const { messages, input, handleInputChange, append, isLoading, setInput, setMessages, stop } = useChat({
+  const chatSafety = useChatSafety(setChatError);
+  const { messages, input, handleInputChange, append, isLoading, setInput, setMessages, stop, reload } = useChat({
     api: '/api/chat',
     // See ChatWindow: per-token updates hit React #185 under React 19.
     experimental_throttle: 50,
     initialMessages: [],
     id: `goal-${id}`,
-    headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+    // Token fetched at SEND time, not baked in once (expired after 1h).
+    fetch: chatSafety.fetch,
     body: {
       personalContext: settings.personalContext ?? '',
       responseStyle: settings.responseStyle ?? 'normal',
@@ -372,17 +375,10 @@ function GoalDetailPageContent() {
         ? { id: goal.id, title: goal.title, description: goal.description, progress: goal.progress, timeframe: goal.timeframe, activeChatId }
         : undefined,
     },
-    onError: (err) => {
-      const m = (err?.message ?? '').toLowerCase();
-      if (m.includes('authentication_required')) setChatError('Your session expired, refresh and sign in again.');
-      else if (m.includes('free_limit_reached')) setChatError("You've hit your free limit for now. It refreshes soon, or upgrade for every model.");
-      else if (m.includes('image_requires_subscription')) setChatError('Images are a paid feature, subscribe to attach one.');
-      else if (m.includes('subscription_required')) setChatError('Continue with the Free plan or upgrade for more access.');
-      else if (m.includes('token_limit_reached')) setChatError("You've hit your daily AI limit. Resets at midnight.");
-      else if (m.includes('all_models_busy') || m.includes('rate') || m.includes('busy') || m.includes('429')) setChatError('The AI is briefly busy. Try again in a moment.');
-      else setChatError('Something went wrong. Please try again.');
-    },
+    onFinish: chatSafety.onFinish,
+    onError: chatSafety.onError,
   });
+  useChatSafetyWatch(chatSafety, { messages, isLoading, stop, reload, setMessages });
 
   useEffect(() => {
     if (!chatsLoaded || seededRef.current || !goal) return;

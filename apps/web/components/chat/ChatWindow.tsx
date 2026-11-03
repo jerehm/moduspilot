@@ -8,6 +8,8 @@ import { useRef, useEffect, useState, useMemo } from 'react';
 import Image from 'next/image';
 import type { Message } from 'ai';
 import { auth } from '@/lib/firebase';
+import { chatErrorView } from '@/lib/chat/client-errors';
+import { upsertFinalMessage } from '@/hooks/useChatSafety';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { modelName, unlockedModels, canonicalModelId, FREE_DEFAULT } from '@/lib/models';
 import { isAwaitingAssistantText } from '@/lib/chat/pending';
@@ -443,63 +445,21 @@ export default function ChatWindow({
     },
     onFinish: (message) => {
       streamCompletedRef.current = true;
+      // Throttled `messages` can miss a fast answer at the loading edge, which
+      // made the empty check retry a real answer and the save drop its tail.
+      // See upsertFinalMessage in hooks/useChatSafety.ts.
+      setMessages(prev => upsertFinalMessage(prev, message));
       // An empty answer is never added to `messages`, but this copy of it still
       // carries the annotations, which is where web search is recorded.
       finishedWebSearchRef.current = readWebSearchAnnotation(message) > 0;
     },
     onError: (err) => {
       fallbackNoticeRef.current = null;
-      const msg = (err?.message ?? '').toLowerCase();
-      if (msg.includes('authentication_required')) {
-        // With per-send fresh tokens (F1) a signed-in user should effectively
-        // never reach here. If a token is momentarily rejected, the NEXT send
-        // mints a new one and succeeds — so guide to retry rather than telling a
-        // signed-in person they are logged out (the old copy was the visible half
-        // of the auth-token race).
-        setChatError('We had trouble verifying your session. Please try again.');
-      } else if (msg.includes('free_limit_reached')) {
-        // A DISTINCT code from subscription_required on purpose. This person has
-        // been using MODUS for ten messages — telling them to "start your free
-        // trial" reads as the product forgetting who they are. Name what ran out.
-        setChatError("You've hit your free limit for now. It refreshes soon, or upgrade for every model.");
-        onExhausted?.();
-        onShowPaywall?.();
-      } else if (msg.includes('image_requires_subscription')) {
-        setChatError('Images are a paid feature, subscribe to attach one.');
-        onShowPaywall?.();
-      } else if (msg.includes('subscription_required')) {
-        setChatError('Continue with the Free plan or upgrade for more access.');
-        onExhausted?.();
-        onShowPaywall?.();
-      } else if (msg.includes('empty_message')) {
-        // The composer already blocks this, so it only reaches here from another
-        // client (mobile, the API directly). Say something useful rather than
-        // "something went wrong".
-        setChatError('That message was empty, type something first.');
-      } else if (msg.includes('token_limit_reached')) {
-        // "usage limit", not "token limit" — the ceiling counts cost units, and
-        // the two differ by up to 27x on frontier models.
-        setChatError("You've hit your daily AI usage limit. Resets at midnight.");
-      } else if (msg.includes('groq_daily_limit')) {
-        setChatError('AI daily limit reached, switch models with the selector below the chat box, or try again tomorrow.');
-      } else if (msg.includes('rate_limit_reached') || msg.includes('rate limit') || msg.includes('429') || msg.includes('tpd') || msg.includes('tokens per day') || msg.includes('too many')) {
-        setChatError('AI service is busy. Wait a moment and try again.');
-      } else if (msg.includes('api_key_error') || msg.includes('401') || msg.includes('unauthorized') || msg.includes('api key') || msg.includes('invalid key')) {
-        setChatError('AI service configuration error. Contact support.');
-      } else if (msg.includes('provider_down') || msg.includes('503') || msg.includes('502') || msg.includes('unavailable') || msg.includes('overloaded')) {
-        setChatError('AI service is down. Try again in a moment.');
-      } else if (msg.includes('all_models_busy') || msg.includes('message_too_large')) {
-        // NOT a message-length problem — the server already tried every model and
-        // all were briefly throttled. Honest transient copy, no "shorten it".
-        setChatError('The AI is briefly busy right now. Wait a few seconds and try again, or switch models below.');
-      } else if (msg.includes('invalid_request')) {
-        // The server could not read the message shape (e.g. a malformed attachment
-        // part). Point at the likely cause instead of the blank "something went
-        // wrong", and give a concrete recovery.
-        setChatError('That message could not be sent. Remove the attachment and try again, or start a new chat.');
-      } else {
-        setChatError('Something went wrong. Please try again.');
-      }
+      // One mapping for every chat surface: lib/chat/client-errors.ts.
+      const view = chatErrorView(err?.message);
+      setChatError(view.text);
+      if (view.exhausted) onExhausted?.();
+      if (view.paywall) onShowPaywall?.();
     },
   });
 
@@ -795,6 +755,16 @@ export default function ChatWindow({
       }
     }
 
+    // 🚨 A FAILED FIRST TURN USED TO VANISH. The first save of a draft creates the
+    // conversation, which remounts this window (key = conversation id) and wipes
+    // chatError. So a 401, 500 or stall on the first message of a new chat left
+    // the user staring at their own message with no answer and no error (found
+    // 11-02 by driving the UI with faked failures). Until the draft has an
+    // answer, a turn that did not complete normally is not saved: the window
+    // stays, the error stays, Regenerate works, and the next good turn saves all.
+    const hasAnswer = messages.some(m => m.role === 'assistant' && extractTextContent(m.content).trim() !== '');
+    if (!conversationId && !completed && !hasAnswer) return;
+
     if (messages.length === 0 || !onMessagesChange) return;
     // Regenerated replies can have the same message count. Save every finished
     // response so a retry is not lost when the user reloads.
@@ -835,7 +805,7 @@ export default function ChatWindow({
     });
 
     onMessagesChange(messagesToSave, title);
-  }, [isLoading, messages, onMessagesChange, routedByMsgId, attachmentsByMsgId, reload]);
+  }, [isLoading, messages, onMessagesChange, routedByMsgId, attachmentsByMsgId, reload, conversationId]);
 
   function handleVoiceTranscript(text: string) {
     setInput(text);

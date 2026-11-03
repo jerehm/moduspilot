@@ -13,6 +13,7 @@ import { useConversations } from '@/hooks/useConversations';
 import { useResizableSidebar } from '@/hooks/useResizableSidebar';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { useChat } from 'ai/react';
+import { useChatSafety, useChatSafetyWatch } from '@/hooks/useChatSafety';
 import { isAwaitingAssistantText } from '@/lib/chat/pending';
 import type { Message } from 'ai';
 import type { BriefingData, BriefingScheduleItem } from '@/lib/briefing';
@@ -1293,17 +1294,25 @@ function BriefingContent({ briefing, onEnergySelect, settings, saveMessages, aut
 
   const initialMessages: Message[] = [{ id: `briefing-${briefing.id}`, role: 'assistant', content: briefing.content }];
 
-  const { messages, input, handleInputChange, append, isLoading, setInput, setMessages } = useChat({
+  // Briefing chat had NO error handling at all until 11-02: any failure, stall
+  // or empty answer showed nothing. See hooks/useChatSafety.ts.
+  const [chatError, setChatError] = useState<string | null>(null);
+  const chatSafety = useChatSafety(setChatError);
+  const { messages, input, handleInputChange, append, isLoading, setInput, setMessages, stop, reload } = useChat({
     api: '/api/chat', initialMessages, id: briefing.id,
     // See ChatWindow: per-token updates hit React #185 under React 19.
     experimental_throttle: 50,
-    headers: authToken ? { Authorization: `Bearer ${authToken}` } : undefined,
+    // Token fetched at SEND time, not baked in once (expired after 1h).
+    fetch: chatSafety.fetch,
+    onFinish: chatSafety.onFinish,
+    onError: chatSafety.onError,
     body: {
       personalContext: settings.personalContext ?? '', responseStyle: settings.responseStyle ?? 'normal',
       customStyle: settings.customStyle ?? '', briefingHour: settings.briefingHour ?? 7,
       briefingTimezone: settings.briefingTimezone ?? 'UTC',
     },
   });
+  useChatSafetyWatch(chatSafety, { messages, isLoading, stop, reload, setMessages });
 
   useEffect(() => { setMessages(initialMessages); savedLengthRef.current = 1; }, [briefing.id]);
 
@@ -1323,7 +1332,7 @@ function BriefingContent({ briefing, onEnergySelect, settings, saveMessages, aut
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
-    const val = input.trim(); setInput('');
+    const val = input.trim(); setInput(''); setChatError(null);
     await append({ role: 'user', content: val });
   }
 
@@ -1538,6 +1547,13 @@ function BriefingContent({ briefing, onEnergySelect, settings, saveMessages, aut
         )}
 
         <div ref={bottomRef} />
+
+        {chatError && (
+          <div className="mt-3 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center justify-between gap-3" role="alert">
+            <p className="text-xs text-red-400">{chatError}</p>
+            <button onClick={() => setChatError(null)} className="text-red-400 hover:text-red-300 shrink-0 text-xs" aria-label="Dismiss">Dismiss</button>
+          </div>
+        )}
 
         <div className="mt-4">
           <FadeCard delay={0.42}>

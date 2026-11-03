@@ -246,8 +246,26 @@ export async function* streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
 
+  // Inactivity watchdog, same 45s as the web chat: a stream that goes quiet used
+  // to spin until the server's 300s kill. Resets on every chunk.
+  const STALL_MS = 45000;
   while (true) {
-    const { done, value } = await reader.read();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stalled = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        reader.cancel().catch(() => {});
+        const e = new Error('response_stalled');
+        e.name = 'StallError';
+        reject(e);
+      }, STALL_MS);
+    });
+    let result: ReadableStreamReadResult<Uint8Array>;
+    try {
+      result = await Promise.race([reader.read(), stalled]);
+    } finally {
+      clearTimeout(timer);
+    }
+    const { done, value } = result;
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });
@@ -263,6 +281,12 @@ export async function* streamChat(
         } catch {
           // malformed chunk — skip
         }
+      } else if (line.startsWith('3:')) {
+        // The server's stream error token (rate_limit_reached, chat_error...).
+        // Ignoring it used to turn every mid-stream failure into "Empty response".
+        let token = 'chat_error';
+        try { token = String(JSON.parse(line.slice(2))); } catch {}
+        throw new Error(token);
       }
     }
   }

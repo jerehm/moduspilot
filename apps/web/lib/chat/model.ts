@@ -685,11 +685,20 @@ export function createFallbackModel(
      * guardSilentStream. Only set for Gemini today (silentStreamBackup).
      */
     silentBackup?: LM;
+    /**
+     * The streamText maxSteps. On that step, tools are switched off (toolChoice
+     * none) so a tool loop has to END IN TEXT. Otherwise a turn that spends all
+     * 5 steps calling tools finishes on a tool call and the user sees a blank
+     * bubble. streamText in the pinned ai@4.3.19 has no prepareStep, but every
+     * step is its own doStream call through here, so this is where to count.
+     */
+    maxSteps?: number;
   } = {},
 ): LM {
   // One model = no switch is possible, so the caller's assumed id is already
   // correct and onServed would be pure noise.
-  if (models.length <= 1 && !opts.silentBackup) return models[0];
+  if (models.length <= 1 && !opts.silentBackup && !opts.maxSteps) return models[0];
+  let step = 0;
   const attempt = async <T>(run: (m: LM) => PromiseLike<T>): Promise<T> => {
     let lastErr: unknown;
     for (let i = 0; i < models.length; i++) {
@@ -714,7 +723,12 @@ export function createFallbackModel(
   return new Proxy(models[0], {
     get(target, prop, receiver) {
       if (prop === 'doStream') {
-        return async (options: Parameters<LM['doStream']>[0]) => {
+        return async (callOptions: Parameters<LM['doStream']>[0]) => {
+          step++;
+          let options = callOptions;
+          if (opts.maxSteps && step >= opts.maxSteps && options.mode.type === 'regular' && options.mode.tools?.length) {
+            options = { ...options, mode: { ...options.mode, toolChoice: { type: 'none' } } };
+          }
           const out = await attempt((m) => m.doStream(options));
           const backup = opts.silentBackup;
           if (!backup) return out;
@@ -793,8 +807,8 @@ type StreamPart = Awaited<ReturnType<LM['doStream']>>['stream'] extends Readable
  *
  * So hold every part until the first real output (text, tool call, reasoning).
  * Once real output arrives, pass everything through untouched. If the stream
- * FINISHES (or just ends) before any real output with a finish reason that is
- * not a clean stop, drop it and pipe the backup's stream for the same step
+ * FINISHES (or just ends) before any real output, for any reason but length or
+ * content-filter, drop it and pipe the backup's stream for the same step
  * instead. Nothing has reached the client yet, so the swap is invisible apart
  * from the honest model label (onServed). One swap per step, never a loop.
  */
@@ -827,7 +841,10 @@ export function guardSilentStream(
             controller.enqueue(value);
             continue;
           }
-          if (value.type === 'finish' && value.finishReason !== 'stop' && value.finishReason !== 'length' && value.finishReason !== 'content-filter') {
+          // 'stop' counts too: a clean stop with zero output is still a blank
+          // bubble. 'length' and 'content-filter' are left alone, the backup
+          // would hit the same wall (and a filter must not be routed around).
+          if (value.type === 'finish' && value.finishReason !== 'length' && value.finishReason !== 'content-filter') {
             silentFinish = value.finishReason;
             continue;
           }
@@ -855,12 +872,13 @@ export function guardSilentStream(
 }
 
 /**
- * The model that re-runs a silent Gemini step: Flash Lite on the direct Google
- * key. On 10-30 it is what answered when the user switched by hand, with the same
- * 11 tools. If the silent model WAS Flash Lite, it retries itself once.
+ * The model that re-runs a silent step, for EVERY primary (Claude, GPT, Llama,
+ * Grok can all return an empty step too): Flash Lite on the direct Google key.
+ * On 10-30 it is what answered when the user switched by hand, with the same 11
+ * tools. If the silent model WAS Flash Lite, it retries itself once. The swap is
+ * reported through onServed, so the answer is labeled as Flash Lite.
  */
-export function silentStreamBackup(modelId: string): LM | undefined {
-  if (!modelId.startsWith('gemini-')) return undefined;
+export function silentStreamBackup(_modelId: string): LM | undefined {
   const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
   if (!googleKey) return undefined;
   return repairReasoningStream(googleProvider(googleKey)(FREE_DEFAULT)) as LM;

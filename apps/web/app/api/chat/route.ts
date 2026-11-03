@@ -360,6 +360,23 @@ export async function POST(req: Request) {
       historyChars += size;
       kept.unshift(trimmed);
     }
+    // 🚨 THE HISTORY MUST START WITH A USER MESSAGE. Goal and Project chats open
+    // with a seeded Modus greeting ("You're at 0% on ..."), and trimming a long
+    // chat can leave an assistant or orphan tool result first. Llama on Groq
+    // rejects that outright ("A conversation must start with a user message"),
+    // so every Auto-routed general question on a goal or project answered with
+    // "Something went wrong" (found 11-02 driving the real UI). Drop orphan tool
+    // results, and put a short user line in front of a leading assistant turn so
+    // its text stays in context instead of being thrown away.
+    while (kept.length > 1 && kept[0].role === 'tool') kept.shift();
+    if (kept[0]?.role === 'assistant') {
+      kept.unshift({
+        role: 'user',
+        content: kept.length < clientCore.length
+          ? '(Earlier messages in this conversation are not shown.)'
+          : '(Modus opened this conversation with the message below.)',
+      });
+    }
     const cappedMessages = kept;
 
     // Safety net: never hand the provider an empty-content user message. Several
@@ -954,6 +971,8 @@ export async function POST(req: Request) {
       {
         onFallback: (from, to, err) => console.log(`[chat] failover: ${from}→${to} (${String(err).slice(0, 140)})`),
         silentBackup: silentStreamBackup(resolved.modelId),
+        // Must match the maxSteps on streamText below. Only bites when tools are on.
+        maxSteps: 5,
         onServed: (id) => {
           servedModelId = id;
           if (id === resolved.modelId) return;

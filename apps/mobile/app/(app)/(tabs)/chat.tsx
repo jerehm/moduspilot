@@ -504,6 +504,12 @@ export default function ChatScreen() {
               { text: 'Start trial', onPress: () => router.push('/(app)/billing') },
             ],
           );
+        } else if (name === 'StallError') {
+          Alert.alert('Response stalled', 'The response stalled. Please try again, or switch models.');
+        } else if (/rate_limit|all_models_busy|429|busy/.test(msg)) {
+          Alert.alert('Busy', 'The AI is briefly busy right now. Wait a few seconds and try again.');
+        } else if (/limit_reached/.test(msg)) {
+          Alert.alert('Limit reached', "You've hit your usage limit for now. It refreshes soon, or upgrade for more.");
         } else {
           Alert.alert('Error', 'Failed to get a response. Please try again.');
         }

@@ -216,13 +216,28 @@ export default function ProjectDetail() {
         })
         listRef.current?.scrollToEnd({ animated: false })
       }
+      // A reply that completed with nothing used to leave a blank bubble here.
+      if (mountedRef.current) {
+        setChatMsgs(prev => {
+          const next = [...prev]
+          const last = next[next.length - 1]
+          if (last?.role === 'assistant' && !last.content.trim()) {
+            next[next.length - 1] = { ...last, content: 'The model returned an empty response. Try again, or switch models.' }
+            current = next
+          }
+          return next
+        })
+      }
     } catch (err: unknown) {
       if (err instanceof Error && err.name !== 'AbortError' && mountedRef.current) {
+        const text = err.name === 'StallError'
+          ? 'The response stalled. Please try again.'
+          : 'Something went wrong. Please try again.'
         setChatMsgs(prev => {
           const next = [...prev]
           const last = next[next.length - 1]
           if (last?.role === 'assistant' && !last.content) {
-            next[next.length - 1] = { ...last, content: 'Something went wrong. Please try again.' }
+            next[next.length - 1] = { ...last, content: text }
             current = next
           }
           return next
