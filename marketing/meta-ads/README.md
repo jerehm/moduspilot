@@ -5,12 +5,12 @@ Offer: paid MODUS ($24/mo, or $20/mo billed yearly). No free-tier CTA.
 
 ## What's in here
 - `copy.md` has the primary text, headlines and CTA for each audience.
-- `prompts/` has image prompts grouped by audience (`broad`, `students`, `founders`, `office`, `native`). Each concept has an ID like `B1` or `S2`.
-- `reference/` has the real logo files and 2 real app screenshots to attach in ChatGPT.
+- The `prompts-*.md` files have image prompts grouped by audience (`broad`, `students`, `founders`, `office`, `native`). Each concept has an ID like `B1` or `S2`.
+- this folder has the real logo files and 2 real app screenshots to attach in ChatGPT.
 - `CHATGPT-PROMPT.md` is the prompt to paste into ChatGPT, plus fixes for common problems.
 
 ## How to make an image in OpenAI
-1. Attach `reference/logo.png` (or `logo-with-text.png` when the prompt asks for the wordmark).
+1. Attach `logo.png` (or `logo-with-text.png` when the prompt asks for the wordmark).
 2. If the prompt says **[REAL UI]**, also attach a real screenshot (see below).
 3. Paste the prompt and the **Brand block** below it.
 4. Generate at **1024x1536**. Crop to **1080x1350 (4:5)** for feed and use full height for Stories.
@@ -19,7 +19,7 @@ Offer: paid MODUS ($24/mo, or $20/mo billed yearly). No free-tier CTA.
 ### Brand block (paste under every prompt)
 > Use the attached MODUS logo exactly as provided. Do not redraw, recolor or restyle it. Colors: warm ivory background #F0EEE6, near-black ink #141413, violet #7C3AED for small accents only. Clean modern sans serif or elegant serif type, high contrast and easy to read on a phone. Do not include any other company's logo or app icon. Model names appear as plain text only.
 
-### Real screenshots (already in `reference/`, for [REAL UI] concepts)
+### Real screenshots (already in this folder, for [REAL UI] concepts)
 Captured 11-03 on live moduspilot.com, light mode, on the $24 MODUS plan, with no name or chat history in frame:
 - `ui-model-picker.png`: the model picker showing DeepSeek V3.1, GPT-6.1 Sol, Claude Sonnet 5.5 and Gemini 3.8 Flash.
 - `ui-compare-3-models.png`: one question answered by GPT, Claude and Gemini side by side (real answers).

@@ -2,12 +2,12 @@
 
 ## Steps
 1. Open a new ChatGPT chat.
-2. Attach these files from `reference/`:
+2. Attach these files from this folder:
    - `logo.png` (the mark)
    - `logo-with-text.png` (the mark with "MODUS PILOT", same as the site's navbar)
    - `ui-model-picker.png` (real screenshot: DeepSeek, GPT, Claude and Gemini on the $24 plan)
    - `ui-compare-3-models.png` (real screenshot: GPT, Claude and Gemini answering side by side)
-3. Attach the concept file for the audience you're doing, for example `prompts/broad.md`.
+3. Attach the concept file for the audience you're doing, for example `prompts-broad.md`.
 4. Paste everything between the lines below.
 
 ---
