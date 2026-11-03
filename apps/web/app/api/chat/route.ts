@@ -19,7 +19,7 @@ import {
   usagePercent,
 } from '@/lib/chat/limits';
 import { FREE_MAX_MESSAGE_CHARS, FREE_HISTORY_CHAR_BUDGET } from '@/lib/constants';
-import { resolveChatModel, chatFallbackChain, createFallbackModel, isPremiumModel, modelSupportsTools } from '@/lib/chat/model';
+import { resolveChatModel, chatFallbackChain, createFallbackModel, silentStreamBackup, isPremiumModel, modelSupportsTools } from '@/lib/chat/model';
 import { routeTask } from '@/lib/chat/auto-route';
 import { canUseModel } from '@/lib/models';
 import {
@@ -953,6 +953,7 @@ export async function POST(req: Request) {
       chatFallbackChain(chatModel as Parameters<typeof createFallbackModel>[0][number]),
       {
         onFallback: (from, to, err) => console.log(`[chat] failover: ${from}→${to} (${String(err).slice(0, 140)})`),
+        silentBackup: silentStreamBackup(resolved.modelId),
         onServed: (id) => {
           servedModelId = id;
           if (id === resolved.modelId) return;

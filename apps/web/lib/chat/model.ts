@@ -680,11 +680,16 @@ export function createFallbackModel(
     onFallback?: (fromId: string, toId: string, err: unknown) => void;
     /** Fires with the model whose request was accepted — i.e. the one answering. */
     onServed?: (modelId: string) => void;
+    /**
+     * Re-runs a step whose stream finished having said NOTHING. See
+     * guardSilentStream. Only set for Gemini today (silentStreamBackup).
+     */
+    silentBackup?: LM;
   } = {},
 ): LM {
   // One model = no switch is possible, so the caller's assumed id is already
   // correct and onServed would be pure noise.
-  if (models.length <= 1) return models[0];
+  if (models.length <= 1 && !opts.silentBackup) return models[0];
   const attempt = async <T>(run: (m: LM) => PromiseLike<T>): Promise<T> => {
     let lastErr: unknown;
     for (let i = 0; i < models.length; i++) {
@@ -709,7 +714,19 @@ export function createFallbackModel(
   return new Proxy(models[0], {
     get(target, prop, receiver) {
       if (prop === 'doStream') {
-        return (options: Parameters<LM['doStream']>[0]) => attempt((m) => m.doStream(options));
+        return async (options: Parameters<LM['doStream']>[0]) => {
+          const out = await attempt((m) => m.doStream(options));
+          const backup = opts.silentBackup;
+          if (!backup) return out;
+          return {
+            ...out,
+            stream: guardSilentStream(out.stream, async () => {
+              const b = await backup.doStream(options);
+              opts.onServed?.(backup.modelId);
+              return b.stream;
+            }),
+          };
+        };
       }
       if (prop === 'doGenerate') {
         return (options: Parameters<LM['doGenerate']>[0]) => attempt((m) => m.doGenerate(options));
@@ -761,6 +778,92 @@ export function backgroundModel(gatewayModelId: string, label: string): LM {
     onFallback: (from, to, err) =>
       console.warn(`[${label}] failover: ${from}→${to} (${String(err).slice(0, 120)})`),
   });
+}
+
+type StreamPart = Awaited<ReturnType<LM['doStream']>>['stream'] extends ReadableStream<infer P> ? P : never;
+
+/**
+ * 🚨 GEMINI SOMETIMES SENDS A STREAM THAT PARSES AND SAYS NOTHING.
+ *
+ * 10-30, twice in 15s on gemini-3.8-flash with 11 MCP tools: no text, no tool
+ * call, finishReason=unknown, usage NaN, no error. Those are @ai-sdk/google's
+ * INITIAL values, so Google never sent a finish or usage chunk: the stream was
+ * cut off ~5s in. Failover never saw it, because doStream had already resolved
+ * successfully. The user got a blank bubble.
+ *
+ * So hold every part until the first real output (text, tool call, reasoning).
+ * Once real output arrives, pass everything through untouched. If the stream
+ * FINISHES (or just ends) before any real output with a finish reason that is
+ * not a clean stop, drop it and pipe the backup's stream for the same step
+ * instead. Nothing has reached the client yet, so the swap is invisible apart
+ * from the honest model label (onServed). One swap per step, never a loop.
+ */
+export function guardSilentStream(
+  primary: ReadableStream<StreamPart>,
+  runBackup: () => Promise<ReadableStream<StreamPart>>,
+): ReadableStream<StreamPart> {
+  const isReal = (p: StreamPart) =>
+    (p.type === 'text-delta' && p.textDelta.length > 0) ||
+    p.type === 'tool-call' ||
+    p.type === 'tool-call-delta' ||
+    p.type === 'reasoning' ||
+    p.type === 'source' ||
+    p.type === 'file';
+  return new ReadableStream<StreamPart>({
+    async start(controller) {
+      const held: StreamPart[] = [];
+      let live = false;
+      let silentFinish: string | null = null;
+      const reader = primary.getReader();
+      try {
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (live) { controller.enqueue(value); continue; }
+          if (isReal(value)) {
+            live = true;
+            for (const h of held) controller.enqueue(h);
+            held.length = 0;
+            controller.enqueue(value);
+            continue;
+          }
+          if (value.type === 'finish' && value.finishReason !== 'stop' && value.finishReason !== 'length' && value.finishReason !== 'content-filter') {
+            silentFinish = value.finishReason;
+            continue;
+          }
+          held.push(value);
+        }
+        // Ended with no real output: either a non-clean finish, or no finish at all.
+        const sawFinish = silentFinish !== null || held.some((h) => h.type === 'finish');
+        if (!live && (silentFinish !== null || !sawFinish)) {
+          console.error(`[chat] SILENT STREAM: finishReason=${silentFinish ?? 'none'}, re-running the step on the backup`);
+          const backupReader = (await runBackup()).getReader();
+          for (;;) {
+            const { done, value } = await backupReader.read();
+            if (done) break;
+            controller.enqueue(value);
+          }
+        } else if (!live) {
+          for (const h of held) controller.enqueue(h);
+        }
+        controller.close();
+      } catch (e) {
+        controller.error(e);
+      }
+    },
+  });
+}
+
+/**
+ * The model that re-runs a silent Gemini step: Flash Lite on the direct Google
+ * key. On 10-30 it is what answered when the user switched by hand, with the same
+ * 11 tools. If the silent model WAS Flash Lite, it retries itself once.
+ */
+export function silentStreamBackup(modelId: string): LM | undefined {
+  if (!modelId.startsWith('gemini-')) return undefined;
+  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY?.trim();
+  if (!googleKey) return undefined;
+  return repairReasoningStream(googleProvider(googleKey)(FREE_DEFAULT)) as LM;
 }
 
 export function chatFallbackChain(primary: LM): LM[] {
