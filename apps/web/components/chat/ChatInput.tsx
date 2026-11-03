@@ -23,6 +23,8 @@ interface Props {
   onVoiceTranscript: (text: string) => void;
   onImageAttach: (base64: string, mimeType: string) => void;
   isLoading: boolean;
+  /** While streaming, the send button becomes Stop and calls this. */
+  onStop?: () => void;
   attachedImage: string | null;
   onClearImage: () => void;
   attachedFiles?: { name: string; text: string }[];
@@ -62,7 +64,7 @@ const TEXT_EXT = /\.(txt|md|markdown|csv|tsv|json|log|ya?ml|xml|tsx?|jsx?|py|rb|
 const MAX_CHARS = 24000;
 
 export default function ChatInput({
-  input, onChange, onSubmit, onVoiceTranscript, onImageAttach, isLoading,
+  input, onChange, onSubmit, onVoiceTranscript, onImageAttach, isLoading, onStop,
   attachedImage, onClearImage, attachedFiles = [], onFileAttach, onRemoveFile,
   webSearchOn = false, onToggleWebSearch, compareOn = false, onToggleCompare,
   compareSelected = [], onToggleCompareModel,
@@ -493,6 +495,21 @@ export default function ChatInput({
             </motion.button>
           </Tooltip>
 
+          {isLoading && onStop ? (
+          <Tooltip label="Stop" side="top" className="shrink-0">
+            {/* There was no way to stop a reply: the send button was a disabled
+                spinner until the answer finished or the 45s watchdog fired. */}
+            <motion.button
+              type="button"
+              onClick={onStop}
+              aria-label="Stop"
+              whileTap={{ scale: 0.88 }}
+              className="shrink-0 w-8 h-8 rounded-lg bg-brand flex items-center justify-center hover:bg-brand/90"
+            >
+              <span className="w-3 h-3 rounded-[3px] bg-white" />
+            </motion.button>
+          </Tooltip>
+          ) : (
           <Tooltip label="Send" side="top" className="shrink-0">
             <motion.button
               type="submit"
@@ -512,6 +529,7 @@ export default function ChatInput({
               )}
             </motion.button>
           </Tooltip>
+          )}
         </div>
 
         {(voiceError || attachError) && <p className="text-center text-red-400 text-xs mt-1">{voiceError || attachError}</p>}

@@ -1191,6 +1191,7 @@ export default function ChatWindow({
         >
         <ChatInput
           input={input}
+          onStop={stop}
           onChange={handleInputChange}
           onSubmit={handleSubmit}
           onVoiceTranscript={handleVoiceTranscript}
