@@ -6,7 +6,8 @@ Offer: paid MODUS ($24/mo, or $20/mo billed yearly). No free-tier CTA.
 ## What's in here
 - `copy.md` has the primary text, headlines and CTA for each audience.
 - `prompts/` has image prompts grouped by audience (`broad`, `students`, `founders`, `office`, `native`). Each concept has an ID like `B1` or `S2`.
-- `reference/` has the real logo files to attach in OpenAI.
+- `reference/` has the real logo files and 2 real app screenshots to attach in ChatGPT.
+- `CHATGPT-PROMPT.md` is the prompt to paste into ChatGPT, plus fixes for common problems.
 
 ## How to make an image in OpenAI
 1. Attach `reference/logo.png` (or `logo-with-text.png` when the prompt asks for the wordmark).
@@ -18,12 +19,20 @@ Offer: paid MODUS ($24/mo, or $20/mo billed yearly). No free-tier CTA.
 ### Brand block (paste under every prompt)
 > Use the attached MODUS logo exactly as provided. Do not redraw, recolor or restyle it. Colors: warm ivory background #F0EEE6, near-black ink #141413, violet #7C3AED for small accents only. Clean modern sans serif or elegant serif type, high contrast and easy to read on a phone. Do not include any other company's logo or app icon. Model names appear as plain text only.
 
-### Screenshots to take yourself (for [REAL UI] concepts)
-The old `screenshot-models.png` is dark mode, shows your name and lists Llama, so don't use it. Take two fresh light-mode screenshots instead:
-1. **Picker:** open the model picker on moduspilot.com so GPT, Claude, Gemini and DeepSeek are visible.
-2. **Compare:** turn on Multi-model, pick 3 models and ask one question so the 3 answers sit side by side.
+### Real screenshots (already in `reference/`, for [REAL UI] concepts)
+Captured 11-03 on live moduspilot.com, light mode, on the $24 MODUS plan, with no name or chat history in frame:
+- `ui-model-picker.png`: the model picker showing DeepSeek V3.1, GPT-6.1 Sol, Claude Sonnet 5.5 and Gemini 3.8 Flash.
+- `ui-compare-3-models.png`: one question answered by GPT, Claude and Gemini side by side (real answers).
 
-Use a throwaway account name or crop the name out. Never let OpenAI invent a fake MODUS screen.
+Both show the real OpenAI, Anthropic and Google icons as they appear in the app. That is the true product, but Meta can occasionally flag third-party marks, so if an ad gets rejected, crop the icons out.
+
+The repo's old `public/screenshot-models.png` is dark mode, shows a real name and lists Llama, so don't use it. Never let ChatGPT invent a fake MODUS screen.
+
+### Logos
+- `logo.png`: the mark (light backgrounds). `logo-dark.png`: the mark for dark backgrounds.
+- `logo-with-text.png`: the mark with "MODUS PILOT", which matches the live site navbar.
+
+The full ChatGPT prompt is in `CHATGPT-PROMPT.md`.
 
 ## Truth rules (Meta reviews claims, and so do customers)
 - The $24 plan includes GPT, Claude, Gemini, DeepSeek and Llama, verified in `apps/web/lib/models.ts`.
