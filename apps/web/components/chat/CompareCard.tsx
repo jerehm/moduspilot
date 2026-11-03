@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { auth } from '@/lib/firebase';
 import { modelName } from '@/lib/models';
+import { chatErrorView } from '@/lib/chat/client-errors';
 import { logoForModel } from '@/components/marketing/ModelLogos';
 import MarkdownMessage from '@/components/chat/MarkdownMessage';
 import OptionsCard from '@/components/chat/OptionsCard';
@@ -193,8 +194,14 @@ export default function CompareCard({
 
       if (!res.ok || !res.body) {
         const msg = await res.json().catch(() => ({})) as { error?: string };
+        // The route answers with two kinds of error: sentences it wrote itself
+        // ("Model not available on your plan") and the shared limit gates' bare
+        // codes (token_limit_reached, free_limit_reached), which a column used to
+        // print verbatim. Codes go through the same copy every chat surface uses.
+        const raw = msg.error?.trim();
+        const text = raw && !/^[a-z0-9_]+$/.test(raw) ? raw : chatErrorView(raw ?? String(res.status)).text;
         setColumns(c => c.map((col, i) => i === index
-          ? { ...col, status: 'error', error: msg.error ?? `Request failed (${res.status})` } : col));
+          ? { ...col, status: 'error', error: text } : col));
         return;
       }
 
