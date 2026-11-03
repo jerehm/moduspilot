@@ -8,6 +8,22 @@
  */
 export type ChatErrorView = { text: string; paywall?: boolean; exhausted?: boolean };
 
+/**
+ * "It resets in about 3 hours." from a `resetAt` (ms) in the error body. The
+ * body arrives as text (useChat puts the response text in err.message), so it is
+ * read with a regex rather than JSON.parse, which also survives a prefix.
+ */
+export function resetPhrase(raw: string | undefined, now = Date.now()): string {
+  const at = Number(/"resetAt"\s*:\s*(\d{10,})/.exec(raw ?? '')?.[1]);
+  if (!Number.isFinite(at) || at <= now) return 'Try again in a few hours.';
+  const mins = Math.ceil((at - now) / 60000);
+  if (mins < 60) return `It resets in about ${mins} minute${mins === 1 ? '' : 's'}.`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `It resets in about ${hours} hour${hours === 1 ? '' : 's'}.`;
+  const day = new Date(at).toLocaleDateString(undefined, { weekday: 'long' });
+  return `It resets on ${day}.`;
+}
+
 export function chatErrorView(raw: string | undefined): ChatErrorView {
   const msg = (raw ?? '').toLowerCase();
   if (msg.includes('authentication_required')) {
@@ -28,8 +44,10 @@ export function chatErrorView(raw: string | undefined): ChatErrorView {
     return { text: 'Continue with the Free plan or upgrade for more access.', paywall: true, exhausted: true };
   }
   if (msg.includes('empty_message')) return { text: 'That message was empty, type something first.' };
-  // "usage limit", not "token limit": the ceiling counts cost units.
-  if (msg.includes('token_limit_reached')) return { text: "You've hit your daily AI usage limit. Resets at midnight." };
+  // "usage limit", not "token limit": the ceiling counts cost units. It is NOT
+  // daily and does not reset at midnight (the old copy said both): a rolling
+  // 5h window plus a weekly cap. The server sends `resetAt` with the code.
+  if (msg.includes('token_limit_reached')) return { text: `You've hit your usage limit. ${resetPhrase(raw)}` };
   if (msg.includes('groq_daily_limit')) {
     return { text: 'AI daily limit reached, switch models with the selector below the chat box, or try again tomorrow.' };
   }

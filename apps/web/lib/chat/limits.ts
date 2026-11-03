@@ -138,9 +138,21 @@ export function enforcePaidTokenLimit(userData: Record<string, any>): Response |
   const tokensWindow = now < windowStart + WINDOW_MS ? ((userData.windowTokens as number) ?? 0) : 0;
   const tokensWeek   = (userData.tokenWeek as string) === weekKey ? ((userData.weeklyTokens as number) ?? 0) : 0;
   if (tokensWindow >= windowLimit || tokensWeek >= weeklyLimit) {
-    return Response.json({ error: 'token_limit_reached' }, { status: 429 });
+    // When it actually lifts, so the client can say so. The old copy said
+    // "Resets at midnight", which is true of neither ceiling: the window rolls
+    // 5h from its start, the week resets Monday 00:00 UTC (getUsageWeekKey).
+    // If both are hit, the later one is when the user can chat again.
+    const windowReset = tokensWindow >= windowLimit ? windowStart + WINDOW_MS : 0;
+    const weekReset = tokensWeek >= weeklyLimit ? nextUsageWeekStart(now) : 0;
+    return Response.json({ error: 'token_limit_reached', resetAt: Math.max(windowReset, weekReset) }, { status: 429 });
   }
   return null;
+}
+
+/** Monday 00:00 UTC after `now`: when the weekly counter (getUsageWeekKey) rolls over. */
+export function nextUsageWeekStart(now = Date.now()): number {
+  const monday = Date.parse(`${getUsageWeekKey(now)}T00:00:00Z`);
+  return monday + 7 * 24 * 60 * 60 * 1000;
 }
 
 /**

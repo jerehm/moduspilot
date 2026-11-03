@@ -193,13 +193,14 @@ export default function CompareCard({
       }).finally(() => clearTimeout(headerTimer));
 
       if (!res.ok || !res.body) {
-        const msg = await res.json().catch(() => ({})) as { error?: string };
+        const msg = await res.json().catch(() => ({})) as { error?: string; resetAt?: number };
         // The route answers with two kinds of error: sentences it wrote itself
         // ("Model not available on your plan") and the shared limit gates' bare
         // codes (token_limit_reached, free_limit_reached), which a column used to
         // print verbatim. Codes go through the same copy every chat surface uses.
         const raw = msg.error?.trim();
-        const text = raw && !/^[a-z0-9_]+$/.test(raw) ? raw : chatErrorView(raw ?? String(res.status)).text;
+        // The whole body goes to the mapper so a limit's resetAt comes along.
+        const text = raw && !/^[a-z0-9_]+$/.test(raw) ? raw : chatErrorView(raw ? JSON.stringify(msg) : String(res.status)).text;
         setColumns(c => c.map((col, i) => i === index
           ? { ...col, status: 'error', error: text } : col));
         return;
