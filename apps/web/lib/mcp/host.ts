@@ -1,3 +1,4 @@
+import { safeFetch } from '../ssrf';
 import { jsonSchema, tool } from 'ai';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
@@ -49,7 +50,50 @@ export interface McpHost {
   tools(): Promise<Record<string, unknown>>;
   /** Tool name to widget, for every tool that has one. Filled by tools(). */
   uiByTool: Record<string, ToolUi>;
+  /**
+   * Full results by toolCallId. The model gets a trimmed copy (forModel); tool
+   * cards, widgets and media saving need the real one.
+   */
+  rawResults: Map<string, unknown>;
   close(): Promise<void>;
+}
+
+const MODEL_TEXT_CAP = 40_000;
+
+/**
+ * What the model sees of a tool result. Inline base64 media (a 2MB image is
+ * ~2.7M characters) went straight into the next step's prompt and blew the
+ * context window, surfacing as a misleading "all models busy". Media becomes a
+ * one-line note (the user still sees it in the tool card), and text is capped.
+ */
+export function forModel(result: unknown): unknown {
+  if (!result || typeof result !== 'object') return result;
+  const r = result as { content?: unknown; structuredContent?: unknown; [k: string]: unknown };
+  let budget = MODEL_TEXT_CAP;
+  const clip = (t: string) => {
+    const out = t.length > budget ? `${t.slice(0, Math.max(0, budget))}\n[truncated, ${t.length - budget} more characters]` : t;
+    budget = Math.max(0, budget - t.length);
+    return out;
+  };
+  const content = Array.isArray(r.content) ? r.content.map(part => {
+    const p = (part ?? {}) as Record<string, unknown>;
+    if ((p.type === 'image' || p.type === 'audio') && typeof p.data === 'string') {
+      return { type: 'text', text: `[${p.type} (${String(p.mimeType ?? 'media')}) returned and shown to the user]` };
+    }
+    if (p.type === 'resource' && p.resource && typeof p.resource === 'object') {
+      const res = p.resource as Record<string, unknown>;
+      if (typeof res.blob === 'string') return { type: 'text', text: `[file ${String(res.uri ?? '')} (${String(res.mimeType ?? 'binary')}) returned]` };
+      if (typeof res.text === 'string') return { ...p, resource: { ...res, text: clip(res.text) } };
+    }
+    if (p.type === 'text' && typeof p.text === 'string') return { ...p, text: clip(p.text) };
+    return p;
+  }) : r.content;
+  let structured = r.structuredContent;
+  if (structured !== undefined) {
+    const json = JSON.stringify(structured);
+    if (json.length > budget) structured = { note: `structured result of ${json.length} characters omitted; the user can see it`, preview: clip(json) };
+  }
+  return { ...r, content, ...(structured !== undefined ? { structuredContent: structured } : {}) };
 }
 
 export async function connectMcpHost(opts: {
@@ -67,10 +111,13 @@ export async function connectMcpHost(opts: {
   const headers = opts.authHeader ? { Authorization: opts.authHeader } : undefined;
   const url = new URL(opts.url);
   const transport = opts.transport === 'sse' && !opts.authProvider
-    ? new SSEClientTransport(url, { requestInit: headers ? { headers } : undefined })
+    ? new SSEClientTransport(url, { requestInit: headers ? { headers } : undefined, fetch: safeFetch })
     : new StreamableHTTPClientTransport(url, {
         requestInit: headers ? { headers } : undefined,
         authProvider: opts.authProvider,
+        // Token refresh and auth discovery go to URLs the server names, so
+        // every hop is checked, not just the server URL.
+        fetch: safeFetch,
       });
 
   const client = new Client(
@@ -80,9 +127,11 @@ export async function connectMcpHost(opts: {
   await client.connect(transport);
 
   const uiByTool: Record<string, ToolUi> = {};
+  const rawResults = new Map<string, unknown>();
   return {
     client,
     uiByTool,
+    rawResults,
     async tools() {
       const out: Record<string, unknown> = {};
       const { tools } = await client.listTools();
@@ -106,7 +155,7 @@ export async function connectMcpHost(opts: {
                 content: [{ type: 'text', text: 'Out of time on this turn. Tell the user what finished so far and that they can say "continue" to pick it up.' }],
               };
             }
-            return client.callTool(
+            const res = await client.callTool(
               { name: t.name, arguments: args as Record<string, unknown> },
               undefined,
               // Generation servers block for minutes and stream progress; the
@@ -121,6 +170,8 @@ export async function connectMcpHost(opts: {
                 onprogress: () => {},
               },
             );
+            if (options?.toolCallId) rawResults.set(options.toolCallId, res);
+            return forModel(res);
           },
         });
       }

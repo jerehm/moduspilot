@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { listCatalog } from '@/lib/mcp/catalog';
 import { connectServerById } from '@/lib/mcp/connect-server';
+import { MCP_PLAN_REQUIRED, mcpAllowed } from '@/lib/mcp/plan-gate';
 
 export const maxDuration = 30;
 
@@ -15,6 +16,9 @@ const RESOURCE_CAP = 200_000;
 export async function GET(req: NextRequest) {
   const a = await requireAuth(req);
   if (a instanceof Response) return a;
+  // Free accounts get an empty catalog, not an error: the slash menu just
+  // shows nothing from connectors.
+  if (!(await mcpAllowed(a.uid))) return NextResponse.json({ prompts: [], resources: [] });
   const fresh = new URL(req.url).searchParams.get('fresh') === '1';
   const { prompts, resources } = await listCatalog(a.uid, { fresh });
   return NextResponse.json({ prompts, resources });
@@ -23,6 +27,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const a = await requireAuth(req);
   if (a instanceof Response) return a;
+  if (!(await mcpAllowed(a.uid))) return MCP_PLAN_REQUIRED();
   const b = await req.json().catch(() => ({})) as { op?: string; serverId?: string; name?: string; uri?: string; arguments?: Record<string, unknown> };
   if (!b.serverId) return NextResponse.json({ error: 'serverId required' }, { status: 400 });
   let host;

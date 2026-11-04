@@ -103,3 +103,27 @@ export async function assertPublicUrl(rawUrl: string): Promise<void> {
     if (isPrivateAddr(address)) throw new Error('URL resolves to a private address');
   }
 }
+
+/**
+ * fetch() that refuses private targets on EVERY hop, for code that fetches URLs
+ * a foreign server chose (MCP OAuth discovery hands back resource metadata,
+ * authorization server, token and registration URLs). Checking only the first
+ * URL let a custom server point those at 169.254.169.254 and have us call it.
+ * Redirects are followed by hand so each Location is checked too.
+ */
+export async function safeFetch(input: string | URL | Request, init?: RequestInit): Promise<Response> {
+  let url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+  let req: RequestInit | undefined = input instanceof Request && !init ? input : init;
+  for (let hop = 0; hop < 5; hop++) {
+    await assertPublicUrl(url);
+    const res = await fetch(url, { ...req, redirect: 'manual' });
+    const loc = res.status >= 300 && res.status < 400 ? res.headers.get('location') : null;
+    if (!loc) return res;
+    url = new URL(loc, url).toString();
+    // 303 (and 301/302 after POST, as browsers do) become a body-less GET.
+    if (res.status === 303 || ((res.status === 301 || res.status === 302) && req?.method && req.method !== 'GET')) {
+      req = { ...req, method: 'GET', body: undefined };
+    }
+  }
+  throw new Error('Too many redirects');
+}

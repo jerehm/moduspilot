@@ -29,23 +29,29 @@ export const wsApi = {
     return data.files ?? [];
   },
   read: (ws: string, path: string) => post<{ meta: FileMeta; content: string | null }>(ws, { op: 'read', path }),
-  write: (ws: string, path: string, content: string) => post<{ meta: FileMeta }>(ws, { op: 'write', path, content }),
+  write: (ws: string, path: string, content: string, baseVersion?: number) => post<{ meta: FileMeta }>(ws, { op: 'write', path, content, baseVersion }),
   rename: (ws: string, path: string, to: string) => post<{ meta: FileMeta }>(ws, { op: 'rename', path, to }),
   remove: (ws: string, path: string) => post<{ ok: true }>(ws, { op: 'delete', path }),
   versions: (ws: string, path: string) => post<{ versions: Omit<VersionDoc, 'content'>[] }>(ws, { op: 'versions', path }),
   version: (ws: string, path: string, n: number) => post<{ version: VersionDoc }>(ws, { op: 'version', path, n }),
   restore: (ws: string, path: string, n: number) => post<{ meta: FileMeta }>(ws, { op: 'restore', path, n }),
   async upload(ws: string, file: File, folder = 'uploads'): Promise<FileMeta> {
+    // Vercel refuses request bodies over 4.5MB before our route runs, with a
+    // non-JSON 413 that read as "Upload failed". Say the real limit instead.
+    if (file.size > UPLOAD_MAX_BYTES) throw new Error(`${file.name} is over 4MB, the most that can be uploaded here.`);
     const form = new FormData();
     form.set('ws', ws);
     form.set('folder', folder);
     form.set('file', file);
     const res = await fetch('/api/workspace/upload', { method: 'POST', headers: await headers(), body: form });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.message ?? data.error ?? 'Upload failed');
+    if (!res.ok) throw new Error(data.message ?? data.error ?? (res.status === 413 ? `${file.name} is too large to upload.` : 'Upload failed'));
     return data.meta;
   },
 };
+
+/** Under Vercel's 4.5MB request body limit, with room for the form fields. */
+export const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 
 export function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;

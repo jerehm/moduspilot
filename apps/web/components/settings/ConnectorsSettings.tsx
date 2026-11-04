@@ -214,9 +214,9 @@ export default function ConnectorsSettings({ user }: Props) {
         window.history.replaceState({}, '', window.location.pathname);
       });
     }
-    if (connected && !['notion', 'slack', 'github'].includes(connected) && !connected.includes('@')) {
-      // An MCP connector finished OAuth; the list already shows it from the
-      // initial load, so just clear the query string.
+    if (params.get('mcp_connected')) {
+      // An MCP connector finished OAuth. Its own param, so a connector named
+      // "github" or "a@b" no longer lands in the GitHub or Google flow.
       window.history.replaceState({}, '', window.location.pathname);
     }
     if (connected && connected.includes('@')) {
@@ -373,7 +373,7 @@ export default function ConnectorsSettings({ user }: Props) {
   }
 
   // OAuth connectors: the server runs discovery and registration, then hands
-  // back the provider's consent page. Coming back lands on ?connected=<name>.
+  // back the provider's consent page. Coming back lands on ?mcp_connected=<name>.
   async function connectOAuth(t: { id?: string; name?: string; url?: string }) {
     setMcpAdding(t.id ?? t.url ?? 'oauth');
     setError('');

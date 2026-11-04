@@ -60,6 +60,9 @@ export function chatErrorView(raw: string | undefined): ChatErrorView {
   if (msg.includes('provider_down') || msg.includes('503') || msg.includes('502') || msg.includes('unavailable') || msg.includes('overloaded')) {
     return { text: 'AI service is down. Try again in a moment.' };
   }
+  if (msg.includes('context_too_long')) {
+    return { text: 'This chat got too long for the model, often from a large tool result. Start a new chat and try again.' };
+  }
   if (msg.includes('all_models_busy') || msg.includes('message_too_large')) {
     // Not a length problem: every model was briefly throttled.
     return { text: 'The AI is briefly busy right now. Wait a few seconds and try again, or switch models below.' };

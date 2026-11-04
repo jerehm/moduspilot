@@ -526,7 +526,9 @@ export async function POST(req: Request) {
     const isContentless = isContentlessQuery(queryText);
     const skipMcp = isSmallTalk || isContentless || (isPersonalDataQuery && !hasToolIntent);
 
-    const mcpSetupPromise: Promise<void> = uid && !skipMcp ? (async () => {
+    // Connectors are paid only (2026-11-04). A free account's saved servers are
+    // kept but never connected, so they cost nothing and run nothing.
+    const mcpSetupPromise: Promise<void> = uid && !freeTier && !skipMcp ? (async () => {
       try {
         // OAuth connectors that are not signed in (or lost their grant) have
         // nothing to offer this turn. Connecting them would only 401.
@@ -644,7 +646,7 @@ export async function POST(req: Request) {
     // (its user agent), named local__*, capped, schemas sanitized like MCP's.
     const fromDesktop = /MODUSDesktop\//.test(req.headers.get('user-agent') ?? '');
     let localBlock = '';
-    if (uid && fromDesktop && Array.isArray(body.localTools) && body.localTools.length > 0 && !isContentless) {
+    if (uid && !freeTier && fromDesktop && Array.isArray(body.localTools) && body.localTools.length > 0 && !isContentless) {
       const defs = body.localTools
         .filter(d => typeof d?.name === 'string' && /^local__[\w-]{1,57}$/.test(d.name as string) && d.inputSchema && typeof d.inputSchema === 'object')
         .slice(0, 64);
@@ -1167,8 +1169,34 @@ export async function POST(req: Request) {
       ...(systemTail ? [{ role: 'system' as const, content: systemTail }] : []),
     ];
 
+    // Stop must stop the SERVER too. Without the request's signal a stopped
+    // Pika or Higgsfield run kept going up to 265s and 10 steps, spending the
+    // user's connector credits for an answer nobody would see. The signal also
+    // reaches every MCP tool call (host.ts passes options.abortSignal).
+    //
+    // This SDK (4.3) has no onAbort and onFinish never runs after an abort, so
+    // an abort is billed here from what the steps already sent, and the MCP
+    // sockets are closed. `settled` keeps the two paths from both billing.
+    let settled = false;
+    let stepsDone = 0;
+    let charsOut = 0;
+    const billOnce = (total: number) => {
+      if (settled) return;
+      settled = true;
+      if (uid && total > 0) trackTokenUsage(uid, userData, total, resolved.modelId);
+    };
+    req.signal.addEventListener('abort', () => {
+      if (settled) return;
+      console.log(`[chat] aborted by client after ${stepsDone} step(s) model=${servedModelId}`);
+      billOnce(Math.ceil((promptCharsSent * Math.max(1, stepsDone) + charsOut) / 4));
+      for (const client of mcpClients) client.close().catch(() => {});
+      closeStreamData().catch(() => {});
+    }, { once: true });
+
     const result = streamText({
       model: failoverModel,
+      abortSignal: req.signal,
+      onStepFinish: ({ text: stepText }) => { stepsDone += 1; charsOut += stepText?.length ?? 0; },
       ...(useAnthropicCache
         ? { messages: [...cachedSystemMessages, ...cappedMessages] }
         : { system: fullSystemPrompt + activeMcpBlock + extractionGuard, messages: cappedMessages }),
@@ -1194,6 +1222,22 @@ export async function POST(req: Request) {
         await closeStreamData();
       },
       onFinish: async ({ text, usage, finishReason, steps }) => {
+        // 💸 BILL FIRST. Media saving below can wait up to 30s, and after a tool
+        // ran near the 265s deadline that pushed past maxDuration: the function
+        // was killed before usage was recorded, so the costliest turns went free.
+        //
+        // 🚨 NOT every provider reports usage. Measured 2026-07-23 on the live
+        // stream: Anthropic returns real counts, but Gateway-hosted models AND
+        // gpt-5.6-terra both return {promptTokens: null, completionTokens: null},
+        // so a rough ~4 chars/token estimate over what was sent and received is
+        // strictly better than counting zero. Each step re-sent the whole prompt,
+        // so a 10 step tool loop bills as 10, not one.
+        {
+          const reported = usage?.totalTokens;
+          billOnce(typeof reported === 'number' && Number.isFinite(reported) && reported > 0
+            ? reported
+            : Math.ceil((promptCharsSent * Math.max(1, steps?.length ?? 1) + (text?.length ?? 0)) / 4));
+        }
         // 🚨 An empty answer used to be INVISIBLE here. The route logged a 200,
         // the timing line looked healthy, and nothing recorded that zero
         // characters reached the user — so the blank bubble could only ever be
@@ -1221,12 +1265,31 @@ export async function POST(req: Request) {
         }
         // Save what the tools did. useConversations persists content and
         // annotations only, so without this every tool call vanishes on reload.
+        // Put the FULL tool results back: the model got trimmed copies
+        // (lib/mcp/host.ts forModel), but cards, widgets and media saving need
+        // the inline media and full structured content.
+        for (const step of steps ?? []) {
+          for (const r of step.toolResults as unknown as { toolCallId: string; result: unknown }[]) {
+            for (const c of mcpClients) {
+              if (c.rawResults?.has(r.toolCallId)) { r.result = c.rawResults.get(r.toolCallId); break; }
+            }
+          }
+        }
         const toolRecords = summarizeSteps(steps ?? [], mcpServerByTool, mcpUiByTool);
         // Plugin media into outputs/ before the record is sent, so the card can
         // link the saved copy. Bounded inside saveToolMedia (30s total).
         if (uid && workspaceId && toolRecords.some(r => r.server !== WORKSPACE_SERVER_LABEL && r.state === 'done')) {
+          // Only with the time this request still has (maxDuration 300s, keep
+          // ~10s to send the record and close), so saving can never get the
+          // function killed before the tool cards are sent.
+          const left = t0 + 290_000 - Date.now();
           try {
-            await saveToolMedia(openWorkspace(uid, workspaceId), steps ?? [], toolRecords);
+            if (left > 3000) {
+              await Promise.race([
+                saveToolMedia(openWorkspace(uid, workspaceId), steps ?? [], toolRecords),
+                new Promise(r => setTimeout(r, left)),
+              ]);
+            }
           } catch (e) {
             console.error('[chat] saveToolMedia failed:', String(e));
           }
@@ -1269,16 +1332,7 @@ export async function POST(req: Request) {
         // A rough estimate is strictly better than silently counting zero: ~4
         // chars per token over what we actually sent and received. Prefer real
         // usage whenever the provider gives it.
-        if (uid) {
-          const reported = usage?.totalTokens;
-          const total = typeof reported === 'number' && Number.isFinite(reported) && reported > 0
-            ? reported
-            // Each step re-sent the whole prompt. Counting it once let a 10 step
-            // tool loop bill as one message.
-            : Math.ceil((promptCharsSent * Math.max(1, steps?.length ?? 1) + (text?.length ?? 0)) / 4);
-          // Weighted by what the model actually costs — see lib/chat/model-cost.ts.
-          if (total > 0) trackTokenUsage(uid, userData, total, resolved.modelId);
-        }
+        // (Billed at the top of onFinish, before anything slow.)
         if (!uid || !queryText || !process.env.PINECONE_API_KEY) return;
         // Respect the user's "generate memory from chat" setting (was ignored).
         if (userData?.settings?.generateMemoryFromChat === false) return;
@@ -1340,6 +1394,9 @@ export async function POST(req: Request) {
         // already tried every model, so reaching here means all were briefly
         // busy. Surface that honestly (never tell the user to shorten a 2-char
         // message). Kept the `message_too_large` alias for older cached clients.
+        // A real context overflow (a huge tool result, a long chat) is not
+        // "busy": waiting won't fix it, a new chat will.
+        if (sl.includes('context length') || sl.includes('context window') || sl.includes('maximum context') || sl.includes('prompt is too long') || sl.includes('input is too long') || sl.includes('too many tokens')) return 'context_too_long';
         if (sl.includes('too large') || sl.includes('tokens per minute') || sl.includes('reduce') || sl.includes('message_too_large')) return 'all_models_busy';
         // Don't leak raw provider/internal error text to the client.
         return 'chat_error';

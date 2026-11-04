@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const a = await requireAuth(req);
   if (a instanceof Response) return a;
-  const b = await req.json().catch(() => ({})) as { ws?: string; op?: string; path?: string; to?: string; content?: unknown; n?: number };
+  const b = await req.json().catch(() => ({})) as { ws?: string; op?: string; path?: string; to?: string; content?: unknown; n?: number; baseVersion?: number };
   if (!isWorkspaceId(b.ws)) return NextResponse.json({ error: 'bad_workspace' }, { status: 400 });
   const ws = openWorkspace(a.uid, b.ws);
   const n = Number(b.n);
@@ -51,11 +51,12 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ meta: r.meta, content: r.content ?? null });
       }
       case 'write':
-        return NextResponse.json({ meta: await ws.write(String(b.path ?? ''), b.content, 'user') });
+        return NextResponse.json({ meta: await ws.write(String(b.path ?? ''), b.content, 'user', Number.isInteger(b.baseVersion) ? b.baseVersion : undefined) });
       case 'rename':
         return NextResponse.json({ meta: await ws.rename(String(b.path ?? ''), String(b.to ?? ''), 'user') });
       case 'delete':
-        await ws.delete(String(b.path ?? ''));
+        // The person deleting in the panel means it: free the space.
+        await ws.purge(String(b.path ?? ''));
         return NextResponse.json({ ok: true });
       case 'versions':
         return NextResponse.json({ versions: await ws.versions(String(b.path ?? '')) });

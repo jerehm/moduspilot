@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     const w = openWorkspace(a.uid, ws);
     const name = file.name.replace(/[\/\\]/g, '_').replace(/[\u0000-\u001f]/g, '').slice(0, 120) || 'file';
     const path = await w.freePath(`${folder}/${name}`);
+    if (file.size > 25 * 1024 * 1024) return NextResponse.json({ error: 'too_large', message: 'Files are capped at 25MB.' }, { status: 413 });
     const data = Buffer.from(await file.arrayBuffer());
     const meta = await w.writeBinary(path, data, file.type || mimeFor(path), 'upload');
     return NextResponse.json({ meta });

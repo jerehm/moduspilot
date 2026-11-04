@@ -2,13 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/api-auth';
 import { addMcpServer, getMcpServers, type McpTransport } from '@/lib/mcp-servers';
 import { assertPublicUrl } from '@/lib/ssrf';
-
-const MAX_SERVERS = 10;
+import { MAX_MCP_SERVERS as MAX_SERVERS, MCP_PLAN_REQUIRED, mcpAllowed } from '@/lib/mcp/plan-gate';
 
 export async function POST(req: NextRequest) {
   const auth = await requireAuth(req);
   if (auth instanceof Response) return auth;
   const { uid } = auth;
+  if (!(await mcpAllowed(uid))) return MCP_PLAN_REQUIRED();
 
   const { name, url, authHeader, transport } = await req.json() as { name: string; url: string; authHeader?: string; transport?: McpTransport };
   if (!name?.trim() || !url?.trim()) {

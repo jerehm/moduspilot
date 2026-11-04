@@ -50,9 +50,17 @@ export async function addServer(input: unknown): Promise<LocalMcpServerConfig> {
   const args = Array.isArray(i.args) ? i.args.map(a => String(a)).slice(0, 40) : [];
   const env = i.env && typeof i.env === 'object' ? Object.fromEntries(Object.entries(i.env as Record<string, unknown>).slice(0, 30).map(([k, v]) => [k.slice(0, 80), String(v)])) : undefined;
   if (!name || !command) throw new LocalMcpError('A name and a command are required.');
+  // These change what a trusted-looking command actually loads, so the dialog
+  // could show "npx some-real-server" while running anything.
+  const blocked = Object.keys(env ?? {}).filter(k => /^(NODE_OPTIONS|NODE_PATH|DYLD_.*|LD_.*|PYTHONSTARTUP|PYTHONPATH|PERL5OPT|RUBYOPT|BASH_ENV|ENV|PATH)$/i.test(k));
+  if (blocked.length) throw new LocalMcpError(`These settings are not allowed for a local server: ${blocked.join(', ')}.`);
+  // One line per thing, control characters removed, so the text cannot be
+  // laid out to hide part of the command.
+  const flat = (v: string) => v.replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 300);
+  const envLines = env ? Object.entries(env).map(([k, v]) => `${flat(k)}=${flat(v)}`).join('\n') : '';
   const choice = await ask({
-    message: `Run "${name}" on this Mac?`,
-    detail: `MODUS will start this program when the model needs it:\n\n${command} ${args.join(' ')}${env ? `\n\nWith settings: ${Object.keys(env).join(', ')}` : ''}\n\nOnly add programs you trust.`,
+    message: `Run "${flat(name)}" on this Mac?`,
+    detail: `MODUS will start this program when the model needs it:\n\n${[command, ...args].map(flat).join(' ')}${envLines ? `\n\nWith settings:\n${envLines}` : ''}\n\nOnly add programs you trust.`,
     buttons: ['Add server', 'Cancel'],
     cancelId: 1,
   });
@@ -80,6 +88,9 @@ async function stop(id: string) {
 }
 
 export async function stopAll(): Promise<void> {
+  // Servers still starting are not in `live` yet; wait for them so they are
+  // stopped too instead of finishing their start after the app is gone.
+  await Promise.allSettled([...starting.values()]);
   await Promise.all([...live.keys()].map(stop));
 }
 
@@ -134,12 +145,21 @@ const toolIndex = new Map<string, { serverId: string; tool: string }>();
 /** Tool definitions across every added server, named local__<server>__<tool>. */
 export async function listTools(): Promise<LocalToolDef[]> {
   const out: LocalToolDef[] = [];
+  // Two servers whose names slug the same ("GitHub", "git-hub") used to emit
+  // identical tool names, and calls went to whichever listed last.
+  const used = new Set<string>();
+  const unique = (base: string) => {
+    let n = base, i = 2;
+    while (used.has(n)) { const sfx = `_${i++}`; n = base.slice(0, 64 - sfx.length) + sfx; }
+    used.add(n);
+    return n;
+  };
   await Promise.all(getLocalMcpServers().map(async cfg => {
     try {
       const client = await Promise.race([connect(cfg), new Promise<never>((_, r) => setTimeout(() => r(new Error('start timeout')), LIST_MS))]);
       const { tools } = await client.listTools(undefined, { timeout: LIST_MS });
       for (const t of tools.slice(0, 40)) {
-        const name = `local__${slug(cfg.name)}__${t.name.replace(/[^\w-]/g, '_')}`.slice(0, 64);
+        const name = unique(`local__${slug(cfg.name)}__${t.name.replace(/[^\w-]/g, '_')}`.slice(0, 64));
         toolIndex.set(name, { serverId: cfg.id, tool: t.name });
         out.push({ name, description: (t.description ?? '').slice(0, 1000), inputSchema: t.inputSchema as Record<string, unknown>, server: cfg.name });
       }

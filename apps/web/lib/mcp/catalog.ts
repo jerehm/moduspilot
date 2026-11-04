@@ -44,8 +44,13 @@ export async function listCatalog(uid: string, opts: { fresh?: boolean } = {}) {
   const resources: ResourceEntry[] = [];
   await Promise.all(servers.map(async s => {
     let host;
+    let gaveUp = false;
+    const connectP = connectServerById(uid, s.id);
+    // A connection that opens AFTER the 5s cap would never be closed (host is
+    // still unset in finally). Same late-close guard as the chat route.
+    connectP.then(c => { if (gaveUp) c.host.close().catch(() => {}); }).catch(() => {});
     try {
-      ({ host } = await within(connectServerById(uid, s.id), 5000));
+      ({ host } = await within(connectP, 5000).catch(e => { gaveUp = true; throw e; }));
       const caps = host.client.getServerCapabilities() ?? {};
       const [p, r] = await Promise.all([
         caps.prompts ? within(host.client.listPrompts(), 5000).catch(() => null) : null,

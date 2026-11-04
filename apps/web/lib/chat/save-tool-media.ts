@@ -55,8 +55,20 @@ async function fetchMedia(url: string): Promise<{ data: Buffer; mime: string } |
   if (!/^(image|video|audio)\//.test(mime)) return null;
   const len = Number(res.headers.get('content-length') ?? 0);
   if (len > MAX_BYTES) return null;
-  const data = Buffer.from(await res.arrayBuffer());
-  return data.length <= MAX_BYTES ? { data, mime } : null;
+  // Read in chunks and stop at the cap: with no content-length, arrayBuffer()
+  // pulled the whole body into memory before any size check.
+  if (!res.body) return null;
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_BYTES) { reader.cancel().catch(() => {}); return null; }
+    chunks.push(value);
+  }
+  return { data: Buffer.concat(chunks), mime };
 }
 
 function nameFor(url: string, tool: string, i: number, mime: string): string {

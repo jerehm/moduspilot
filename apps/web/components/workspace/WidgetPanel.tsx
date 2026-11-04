@@ -65,9 +65,11 @@ function cspFor(meta: { csp?: { connectDomains?: string[]; resourceDomains?: str
 
 function withCsp(html: string, csp: string): string {
   const tag = `<meta http-equiv="Content-Security-Policy" content="${csp.replace(/"/g, '&quot;')}">`;
-  // Must precede any script, so it goes first inside <head> (or the document).
-  if (/<head[^>]*>/i.test(html)) return html.replace(/<head[^>]*>/i, m => `${m}${tag}`);
-  return tag + html;
+  // First in the document, before anything the widget wrote. Injecting after
+  // a matched <head> missed pages without one (the regex also matched
+  // <header>, landing the meta in <body>, where it is ignored) and let a script
+  // placed before <head> run first. A leading meta opens the head itself.
+  return `<!doctype html>${tag}${html.replace(/^\uFEFF?\s*<!doctype[^>]*>/i, '')}`;
 }
 
 export function McpAppFrame({ target, onMessage }: { target: WidgetTarget; onMessage: (text: string) => void }) {
@@ -75,8 +77,17 @@ export function McpAppFrame({ target, onMessage }: { target: WidgetTarget; onMes
   const [srcDoc, setSrcDoc] = useState<string | null>(null);
   const [height, setHeight] = useState(420);
   const [error, setError] = useState<string | null>(null);
+  // Read through refs: the effect must run once per tool call. Depending on
+  // the objects re-ran it when the same widget was reopened (a new target
+  // object, same key), closing the bridge and rebuilding it while setSrcDoc got
+  // an identical string, so the iframe never reloaded or re-initialized.
+  const targetRef = useRef(target);
+  targetRef.current = target;
+  const onMessageRef = useRef(onMessage);
+  onMessageRef.current = onMessage;
 
   useEffect(() => {
+    const target = targetRef.current;
     let cancelled = false;
     let bridge: AppBridge | null = null;
     // No state reset here: the panel keys this component by toolCallId, so a
@@ -106,7 +117,7 @@ export function McpAppFrame({ target, onMessage }: { target: WidgetTarget; onMes
         bridge.ondownloadfile = async () => ({});
         bridge.onmessage = async (params) => {
           const text = (params.content ?? []).filter(c => c.type === 'text').map(c => (c as { text: string }).text).join('\n').trim();
-          if (text) onMessage(text);
+          if (text) onMessageRef.current(text);
           return {};
         };
         // +2 for the 1px border on each side, which the widget's own measurement excludes.
@@ -130,7 +141,8 @@ export function McpAppFrame({ target, onMessage }: { target: WidgetTarget; onMes
       cancelled = true;
       bridge?.close().catch(() => {});
     };
-  }, [target, onMessage]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target.toolCallId]);
 
   return (
     <div className="w-full">

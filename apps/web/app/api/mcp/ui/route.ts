@@ -4,6 +4,7 @@ import { adminDb } from '@/lib/firebase-admin';
 import { connectServerById } from '@/lib/mcp/connect-server';
 import { MCP_APP_MIME } from '@/lib/mcp/host';
 import { rateLimitHourly } from '@/lib/mcp/ui-limit';
+import { MCP_PLAN_REQUIRED, mcpAllowed } from '@/lib/mcp/plan-gate';
 
 // Widget tool calls can be generations (Higgsfield "Animate"), which block.
 export const maxDuration = 300;
@@ -28,10 +29,12 @@ export async function POST(req: NextRequest) {
     const snap = await adminDb.collection('users').doc(uid).collection('toolResults').doc(body.toolCallId).get();
     if (!snap.exists) return NextResponse.json({ result: null });
     const d = snap.data()!;
-    return NextResponse.json({ result: JSON.parse(String(d.result ?? 'null')), args: JSON.parse(String(d.args ?? 'null')) });
+    const parse = (v: unknown) => { try { return JSON.parse(String(v ?? 'null')); } catch { return null; } };
+    return NextResponse.json({ result: parse(d.result), args: parse(d.args) });
   }
 
   if (!body.serverId) return NextResponse.json({ error: 'serverId required' }, { status: 400 });
+  if (!(await mcpAllowed(uid))) return MCP_PLAN_REQUIRED();
 
   // Widgets can call tools in a loop; bound it like every other surface.
   if (body.op === 'call' && !(await rateLimitHourly(uid, 120))) {
@@ -65,7 +68,9 @@ export async function POST(req: NextRequest) {
       const result = await host.client.callTool(
         { name: body.name, arguments: body.arguments ?? {} },
         undefined,
-        { timeout: 280_000, resetTimeoutOnProgress: true, onprogress: () => {} },
+        // maxTotalTimeout: progress may extend a call, but never past the
+        // route's own limit (a JSON error beats a platform timeout).
+        { signal: req.signal, timeout: 280_000, resetTimeoutOnProgress: true, maxTotalTimeout: 280_000, onprogress: () => {} },
       );
       return NextResponse.json({ result });
     }

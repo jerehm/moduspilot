@@ -69,9 +69,14 @@ export function resolveInside(rel: unknown): { abs: string; rel: string; base: s
   const base = root();
   const abs = path.resolve(base, clean || '.');
   // realpath of the deepest part that exists, so a symlink cannot point out.
+  // lstat, not existsSync: existsSync follows links, so a DANGLING symlink read
+  // as "missing", the probe moved up to its (inside) parent and the check
+  // passed, and the write then followed the link out of the folder.
+  const lexists = (p: string) => { try { fs.lstatSync(p); return true; } catch { return false; } };
   let probe = abs;
-  while (!fs.existsSync(probe)) probe = path.dirname(probe);
-  const realProbe = fs.realpathSync(probe);
+  while (!lexists(probe)) probe = path.dirname(probe);
+  let realProbe: string;
+  try { realProbe = fs.realpathSync(probe); } catch { throw new FolderError('That path is a broken link.'); }
   if (realProbe !== base && !realProbe.startsWith(base + path.sep)) throw new FolderError('That path is outside the chosen folder.');
   return { abs, rel: path.relative(base, abs).split(path.sep).join('/'), base };
 }

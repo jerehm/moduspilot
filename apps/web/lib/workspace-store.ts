@@ -44,6 +44,10 @@ export function firestoreWsStore(uid: string, ws: string): WsStore {
       await files.doc(meta.id).set(stripUndefined(meta));
       await touch();
     },
+    async deleteMeta(id) {
+      await files.doc(id).delete();
+      await touch();
+    },
     async getVersion(id, n) {
       const s = await files.doc(id).collection('versions').doc(String(n)).get();
       return s.exists ? (s.data() as VersionDoc) : null;
@@ -61,8 +65,11 @@ export function firestoreWsStore(uid: string, ws: string): WsStore {
       await ref.delete();
     },
     async putBlob(id, n, data, mime) {
-      const storagePath = `workspaces/${uid}/${ws}/${id}/${n}`;
+      // Random suffix: two writers racing for version n used to save to the
+      // same object, and the loser's bytes replaced the winner's even though
+      // its commit then failed.
       const token = randomUUID();
+      const storagePath = `workspaces/${uid}/${ws}/${id}/${n}-${token.slice(0, 8)}`;
       const bucket = adminBucket();
       await bucket.file(storagePath).save(data, {
         resumable: false,

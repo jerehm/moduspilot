@@ -145,9 +145,13 @@ function FilesTab({ ws, files, loading, error, selected, onOpen, onRefresh }: {
 const HTML_PREVIEW_CSP = "default-src 'none'; img-src data: blob: https:; media-src data: blob: https:; style-src 'unsafe-inline' https:; font-src data: https:; script-src 'unsafe-inline'; connect-src 'none'; frame-src 'none'; form-action 'none'; base-uri 'none'";
 
 function HtmlPreview({ html }: { html: string }) {
-  const doc = /<head[^>]*>/i.test(html)
-    ? html.replace(/<head[^>]*>/i, m => `${m}<meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}">`)
-    : `<meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}">${html}`;
+  // The CSP goes FIRST, before anything the page wrote. Injecting after a
+  // matched <head> missed pages with none (the regex also matched <header>,
+  // putting the meta in <body>, where it is ignored) and let a script placed
+  // before <head> run before the policy existed. A leading meta makes the
+  // parser open the head itself; the page's own <head> tag is then ignored.
+  const rest = html.replace(/^\uFEFF?\s*<!doctype[^>]*>/i, '');
+  const doc = `<!doctype html><meta http-equiv="Content-Security-Policy" content="${HTML_PREVIEW_CSP}">${rest}`;
   // Same sandbox as plugin widgets: scripts run, but in an opaque origin with
   // no network, so a page the model wrote cannot reach the user's session.
   return <iframe title="HTML preview" sandbox="allow-scripts" srcDoc={doc} className="w-full h-[70vh] rounded-lg border border-border bg-white" />;
@@ -178,7 +182,7 @@ function FilePreview({ ws, path, refreshKey, onChanged, onGone }: { ws: string; 
 
   async function save() {
     setSaving(true);
-    try { await wsApi.write(ws, path, draft); setEditing(false); setHistory(null); setCompare(null); reload(); }
+    try { await wsApi.write(ws, path, draft, meta?.version); setEditing(false); setHistory(null); setCompare(null); reload(); }
     catch (e) { setError(e instanceof Error ? e.message : 'Save failed'); }
     finally { setSaving(false); }
   }
@@ -195,7 +199,7 @@ function FilePreview({ ws, path, refreshKey, onChanged, onGone }: { ws: string; 
   }
 
   async function remove() {
-    if (!window.confirm(`Delete ${path}? You can restore it from its history.`)) return;
+    if (!window.confirm(`Delete ${path}? This removes it and its history for good.`)) return;
     try { await wsApi.remove(ws, path); onChanged(); onGone(); } catch (e) { setError(e instanceof Error ? e.message : 'Delete failed'); }
   }
 

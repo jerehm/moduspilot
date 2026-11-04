@@ -17,10 +17,16 @@ import { backgroundModel } from '@/lib/chat/model';
  */
 export function isJunkFact(fact: string): boolean {
   const f = fact.toLowerCase();
+  // Each rule names the assistant or the act of asking it, ADJACENT to the
+  // verb. The old ".*" and bare-word rules threw away real facts: "requested
+  // replies in Tagalog", "his manager asked him to lead Q3", "is talking with
+  // investors about his AI app", "is using the Notion app".
+  const bot = String.raw`(the\s+)?(assistant|modus|ai|chatbot|bot)\b`;
   return (
-    /\b(interact(s|ing)?|chatting|talking|speaking|conversing)\b.*\b(assistant|modus|ai|chatbot|bot)\b/.test(f) ||
-    /\b(is|was) (using|asking|testing|trying)\b.*\b(assistant|modus|ai|chatbot|bot|app)\b/.test(f) ||
-    /\b(asked|is asking|wants to know|requested|inquired)\b/.test(f) ||
+    new RegExp(String.raw`\b(interact(s|ing)?|chatting|talking|speaking|conversing)\s+(with|to)\s+` + bot).test(f) ||
+    new RegExp(String.raw`\b(is|was)\s+(using|asking|testing|trying)\s+` + bot).test(f) ||
+    /\b(asked|is asking|inquired|wants to know)\s+(about|how|what|why|when|where|which|who|whether|if|for)\b/.test(f) ||
+    /\brequested\s+(information|help|details|an?\s+(explanation|summary|list|answer|overview))\b/.test(f) ||
     /\bno (durable|lasting) fact\b|\bnothing (durable|worth)\b/.test(f)
   );
 }

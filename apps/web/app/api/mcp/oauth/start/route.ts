@@ -4,13 +4,14 @@ import { requireAuth } from '@/lib/api-auth';
 import { getMcpServers, upsertOAuthMcpServer } from '@/lib/mcp-servers';
 import { FirestoreMcpOAuthProvider, mcpRedirectUri, setMcpAuthStatus } from '@/lib/mcp/oauth';
 import { signOAuthState } from '@/lib/oauth-state';
-import { assertPublicUrl } from '@/lib/ssrf';
+import crypto from 'crypto';
+import { assertPublicUrl, safeFetch } from '@/lib/ssrf';
+import { MAX_MCP_SERVERS as MAX_SERVERS, MCP_PLAN_REQUIRED, mcpAllowed } from '@/lib/mcp/plan-gate';
+import { MCP_NONCE_COOKIE } from '@/lib/mcp/oauth';
 import { PLUGIN_DIRECTORY } from '@/lib/plugin-directory';
 
 // Discovery + registration talk to two foreign servers; give them room.
 export const maxDuration = 30;
-
-const MAX_SERVERS = 25;
 
 /**
  * Starts a connector sign-in. Body: { directoryId } for a listed connector, or
@@ -22,6 +23,7 @@ export async function POST(req: NextRequest) {
   const a = await requireAuth(req);
   if (a instanceof Response) return a;
   const { uid } = a;
+  if (!(await mcpAllowed(uid))) return MCP_PLAN_REQUIRED();
 
   const body = await req.json().catch(() => ({})) as { directoryId?: string; name?: string; url?: string };
   const listed = body.directoryId ? PLUGIN_DIRECTORY.find(d => d.id === body.directoryId && d.url && d.oauth) : undefined;
@@ -39,24 +41,33 @@ export async function POST(req: NextRequest) {
 
   const redirectUri = mcpRedirectUri(new URL(req.url).origin);
   const serverId = await upsertOAuthMcpServer(uid, { name, url, redirectUri, directoryId: listed?.id });
+  // The nonce ties the consent round trip to THIS browser: it rides in the
+  // signed state and in an httpOnly cookie, and the callback needs both to
+  // match. Without it, a link from someone else's start would attach the
+  // victim's connector account to the attacker's MODUS account.
+  const nonce = crypto.randomBytes(16).toString('base64url');
   const provider = new FirestoreMcpOAuthProvider(uid, serverId, redirectUri, {
-    state: signOAuthState({ uid, origin: `mcp:${serverId}` }),
+    state: signOAuthState({ uid, origin: `mcp:${serverId}:${nonce}` }),
     interactive: true,
   });
 
   try {
-    const result = await auth(provider, { serverUrl: url });
+    const result = await auth(provider, { serverUrl: url, fetchFn: safeFetch });
     if (result === 'AUTHORIZED') {
       await setMcpAuthStatus(uid, serverId, 'connected');
       return NextResponse.json({ connected: true, id: serverId });
     }
     if (!provider.authorizationUrl) throw new Error('No authorization URL from the server');
-    return NextResponse.json({ authUrl: provider.authorizationUrl.toString(), id: serverId });
+    const res = NextResponse.json({ authUrl: provider.authorizationUrl.toString(), id: serverId });
+    res.cookies.set(MCP_NONCE_COOKIE, nonce, {
+      httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'lax',
+      path: '/api/mcp/oauth', maxAge: 15 * 60,
+    });
+    return res;
   } catch (e) {
+    // Details stay in the log: echoing upstream errors back let the response
+    // be used to probe what sits behind the URLs a server names.
     console.error('[mcp/oauth/start]', name, String(e));
-    return NextResponse.json(
-      { error: `${name} did not accept a sign in from MODUS. ${String(e instanceof Error ? e.message : e).slice(0, 160)}` },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: `${name} did not accept a sign in from MODUS.` }, { status: 502 });
   }
 }

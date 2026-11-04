@@ -10,7 +10,9 @@ import type { PromptEntry, ResourceEntry } from '@/lib/mcp/catalog';
  * five minutes, matching the server cache.
  */
 type Catalog = { prompts: PromptEntry[]; resources: ResourceEntry[] };
-let cached: { at: number; data: Catalog } | null = null;
+// Keyed by uid: after switching accounts in one tab, the previous user's
+// prompts used to show for up to a minute.
+let cached: { at: number; uid: string; data: Catalog } | null = null;
 let inflight: Promise<Catalog> | null = null;
 
 async function authHeaders(): Promise<Record<string, string>> {
@@ -19,12 +21,13 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 function loadCatalog(): Promise<Catalog> {
-  if (cached && Date.now() - cached.at < 60_000) return Promise.resolve(cached.data);
+  const uid = auth.currentUser?.uid ?? '';
+  if (cached && cached.uid === uid && Date.now() - cached.at < 60_000) return Promise.resolve(cached.data);
   inflight ??= (async () => {
     try {
       const res = await fetch('/api/mcp/catalog', { headers: await authHeaders() });
       const data = res.ok ? await res.json() as Catalog : { prompts: [], resources: [] };
-      cached = { at: Date.now(), data };
+      cached = { at: Date.now(), uid, data };
       return data;
     } finally { inflight = null; }
   })();
@@ -60,8 +63,22 @@ export function slashQuery(input: string): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+/** Prompts whose name, or a word of the title, STARTS with the query. A
+ * substring match let "/s" or "/a" match nearly everything. */
 export function matchPrompts(prompts: PromptEntry[], q: string): PromptEntry[] {
-  return prompts.filter(p => !q || p.name.toLowerCase().includes(q) || (p.title ?? '').toLowerCase().includes(q)).slice(0, 8);
+  const starts = (t: string) => t.toLowerCase().split(/[\s_.:-]+/).some(w => w.startsWith(q)) || t.toLowerCase().startsWith(q);
+  return prompts.filter(p => !q || starts(p.name) || starts(p.title ?? '')).slice(0, 8);
+}
+
+/**
+ * Whether Enter should run a prompt instead of sending the message: only when
+ * the user plainly means one (the exact name, or the only match). Otherwise
+ * Enter sends what they typed, and prompts stay one click away.
+ */
+export function enterPicksPrompt(prompts: PromptEntry[], q: string): boolean {
+  if (!q) return false;
+  const m = matchPrompts(prompts, q);
+  return m.some(p => p.name.toLowerCase() === q) || m.length === 1;
 }
 
 export function SlashMenu({ prompts, query, pickSignal, onUse, onClose }: {
@@ -104,8 +121,9 @@ export function SlashMenu({ prompts, query, pickSignal, onUse, onClose }: {
     // Adjusting state during render on a prop change (React's documented
     // pattern), not in an effect.
     setLastPick(pickSignal);
-    if (!picked && matches[0]) {
-      const top = matches[0];
+    // Not while a prompt is loading or just failed: each Enter re-ran it.
+    if (!picked && !busy && !error && matches[0]) {
+      const top = matches.find(p => p.name.toLowerCase() === query) ?? matches[0];
       if (top.arguments.length === 0) queueMicrotask(() => { void run(top, {}); });
       else { setPicked(top); setArgs({}); }
     }

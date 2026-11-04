@@ -6,7 +6,7 @@
  * timeouts so a slow integration can never kill the response. Logic and strings
  * are reproduced verbatim from the original route.
  */
-import { queryMemory } from '@/lib/pinecone';
+import { memoryKey, queryMemory } from '@/lib/pinecone';
 import { adminDb } from '@/lib/firebase-admin';
 import { getValidAccessToken, getAllValidAccessTokens, getAllGoogleAccounts } from '@/lib/google-oauth';
 import { getActionableThreads, type GmailThread } from '@/lib/google-gmail';
@@ -307,7 +307,7 @@ export async function queryMemoryContext(uid: string, queryText: string): Promis
   const relevant = matches
     .filter(m => (m.score ?? 0) > MIN_SCORE)
     .filter(m => {
-      const key = String(m.metadata?.text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const key = memoryKey(String(m.metadata?.text ?? ''));
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;

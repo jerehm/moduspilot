@@ -69,8 +69,17 @@ async function hasNearDuplicate(userId: string, text: string, vector: number[]):
     filter: { userId: { $eq: userId } },
     includeMetadata: true,
   });
-  const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
-  return (result.matches ?? []).some(m => (m.score ?? 0) >= 0.97 || norm(String(m.metadata?.text ?? '')) === norm(text));
+  const key = memoryKey(text);
+  return (result.matches ?? []).some(m => (m.score ?? 0) >= 0.97 || (key !== '' && memoryKey(String(m.metadata?.text ?? '')) === key));
+}
+
+/**
+ * Comparison key for "same memory". Letters and digits in ANY script: the old
+ * [a-z0-9] version turned every Chinese, Japanese, Arabic... fact into "", so
+ * each one counted as a duplicate of the last and was never saved.
+ */
+export function memoryKey(t: string): string {
+  return t.toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 }
 
 export async function clearMemories(userId: string) {

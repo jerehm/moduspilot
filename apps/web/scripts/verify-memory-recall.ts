@@ -52,6 +52,17 @@ async function main() {
 
   check('junk filter drops a meta fact', isJunkFact('Jeremiah is interacting with the assistant.'));
   check('junk filter keeps a real fact', !isJunkFact(SEEDS[0]));
+  for (const keep of [
+    'Jeremiah requested replies in Tagalog from now on.',
+    'His manager asked him to lead the Q3 launch.',
+    'Jeremiah is talking with investors about his AI app.',
+    'Jeremiah is using the Notion app for tracking.',
+  ]) check(`junk filter keeps: ${keep}`, !isJunkFact(keep));
+  for (const drop of ['Jeremiah asked about the weather.', 'The user is asking the assistant for help.', 'Jeremiah requested information about Paris.']) {
+    check(`junk filter drops: ${drop}`, isJunkFact(drop));
+  }
+  const { memoryKey } = await import('../lib/pinecone');
+  check('memory key keeps non-Latin text', memoryKey('我的狗叫小白') !== '' && memoryKey('我的狗叫小白') !== memoryKey('我住在上海'));
 
   const ids: string[] = [];
   try {

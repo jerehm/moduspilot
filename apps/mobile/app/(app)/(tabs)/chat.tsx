@@ -494,6 +494,12 @@ export default function ChatScreen() {
         setMessages(prev => prev.filter(m => m.id !== assistantId));
         Alert.alert('Empty response', 'The model returned an empty response. Try again, or switch models below.');
       } else if (convIdRef.current === sendConvId) {
+        // A tool ran, then the model wrote nothing: keep the tool card, but
+        // never save a silent blank answer under it.
+        if (acc.trim() === '' && !hasRichBlock) {
+          acc = 'The tool finished, but no answer came back. Say "continue" or try again.';
+          setMessages(prev => prev.map(m => (m.id === assistantId ? { ...m, content: acc } : m)));
+        }
         void persist([...priorMessages, userMsg, { id: assistantId, role: 'assistant', content: acc, annotations: anns }]);
         // Keep the annotations on the in-memory message too: every later send
         // re-persists the whole thread from this state.
@@ -521,6 +527,8 @@ export default function ChatScreen() {
           );
         } else if (name === 'StallError') {
           Alert.alert('Response stalled', 'The response stalled. Please try again, or switch models.');
+        } else if (/context_too_long/.test(msg)) {
+          Alert.alert('Chat too long', 'This chat got too long for the model, often from a large tool result. Start a new chat and try again.');
         } else if (/rate_limit|all_models_busy|429|busy/.test(msg)) {
           Alert.alert('Busy', 'The AI is briefly busy right now. Wait a few seconds and try again.');
         } else if (/limit_reached/.test(msg)) {

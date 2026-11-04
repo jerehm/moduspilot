@@ -134,16 +134,23 @@ if (!app.requestSingleInstanceLock()) {
     else createMainWindow().catch((err) => log.error('[main] re-create window failed', err));
   });
 
-  app.on('before-quit', () => {
+  let mcpStopped = false;
+  app.on('before-quit', (e) => {
     (app as unknown as { isQuitting?: boolean }).isQuitting = true;
+    // Local MCP servers are child processes; none may outlive the app. The
+    // SDK's close() waits on the child, so quitting is held until they are
+    // down (3s at most), then resumed.
+    if (!mcpStopped) {
+      e.preventDefault();
+      mcpStopped = true;
+      void Promise.race([stopLocalMcp(), new Promise(r => setTimeout(r, 3000))]).finally(() => app.quit());
+    }
     // A global shortcut is registered with the OS, not with the app. Leaving it
     // behind means the combo stays swallowed system-wide after MODUS is gone.
     globalShortcut.unregisterAll();
     // Tears down any in-flight assist request and stops watch mode. Nothing that
     // reads the screen may survive the app that owns it.
     destroyOverlay();
-    // Local MCP servers are child processes; none may outlive the app.
-    void stopLocalMcp();
   });
 
   // Tray app: closing the window hides it (handled in windows.ts), so this is a

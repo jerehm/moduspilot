@@ -46,6 +46,8 @@ export interface WsStore {
   /** Writes meta + version together. Fails if the stored version != expected. */
   commit(meta: FileMeta, version: VersionDoc, expectedVersion: number): Promise<void>;
   putMeta(meta: FileMeta): Promise<void>;
+  /** Removes the file record itself (its versions must already be gone). */
+  deleteMeta(id: string): Promise<void>;
   getVersion(id: string, n: number): Promise<VersionDoc | null>;
   listVersions(id: string): Promise<Omit<VersionDoc, 'content'>[]>;
   deleteVersion(id: string, n: number): Promise<void>;
@@ -187,20 +189,27 @@ export class Workspace {
     }
   }
 
-  async write(rawPath: string, content: unknown, source: FileSource): Promise<FileMeta> {
+  /**
+   * `baseVersion`: the version the writer last read. The editor sends it, so a
+   * Save no longer silently replaces an edit the model made in the meantime.
+   */
+  async write(rawPath: string, content: unknown, source: FileSource, baseVersion?: number): Promise<FileMeta> {
     const path = normalizePath(rawPath);
     if (typeof content !== 'string') throw new WorkspaceError('bad_content', 'Content must be text.');
     const size = bytes(content);
     if (size > this.limits.maxTextBytes) throw new WorkspaceError('too_large', `Text files are capped at ${Math.round(this.limits.maxTextBytes / 1024)}KB.`);
     const mime = mimeFor(path, 'text/plain');
     if (!isTextMime(mime)) throw new WorkspaceError('not_text', `${path} is not a text file type. Pick a text extension such as .md or .txt.`);
-    return this.commitText(path, content, source, mime);
+    return this.commitText(path, content, source, mime, baseVersion);
   }
 
-  private async commitText(path: string, content: string, source: FileSource, mime: string): Promise<FileMeta> {
+  private async commitText(path: string, content: string, source: FileSource, mime: string, baseVersion?: number): Promise<FileMeta> {
     const id = fileIdFor(path);
     const prev = await this.store.getFile(id);
     const live = prev && !prev.deleted ? prev : null;
+    if (baseVersion !== undefined && (live?.version ?? 0) !== baseVersion) {
+      throw new WorkspaceError('conflict', `${path} changed since you opened it. Reload to see the new version, then edit again.`);
+    }
     const size = bytes(content);
     await this.checkQuota(path, size, live?.size ?? 0, !live);
     const n = (prev?.version ?? 0) + 1;
@@ -268,8 +277,27 @@ export class Workspace {
   async delete(rawPath: string): Promise<void> {
     const path = normalizePath(rawPath);
     const meta = await this.live(path);
-    // Soft delete: the versions stay (restore works), so the bytes stay counted.
+    // Soft delete (the model's delete_file): the versions stay so the user can
+    // restore, and so the bytes stay counted. The panel's Delete uses purge().
     await this.store.putMeta({ ...meta, deleted: true, updatedAt: this.now() });
+  }
+
+  /**
+   * Permanent delete: every version, its stored bytes and the record, and the
+   * bytes come off the account total. Soft delete was the only kind, so
+   * deleting files never freed space and "Delete files to make room" was false.
+   */
+  async purge(rawPath: string): Promise<void> {
+    const path = normalizePath(rawPath);
+    const meta = await this.store.getFile(fileIdFor(path));
+    if (!meta) throw new WorkspaceError('not_found', `No file at ${path}.`);
+    let freed = 0;
+    for (const v of await this.store.listVersions(meta.id)) {
+      await this.store.deleteVersion(meta.id, v.n);
+      freed += v.size;
+    }
+    await this.store.deleteMeta(meta.id);
+    await this.store.addAccountBytes(-freed);
   }
 
   async rename(rawFrom: string, rawTo: string, source: FileSource): Promise<FileMeta> {
@@ -283,14 +311,20 @@ export class Workspace {
     if (!v) throw new WorkspaceError('not_found', `${from} has no content.`);
     let moved: FileMeta;
     if (meta.kind === 'text') {
-      moved = await this.commitText(to, v.content ?? '', source, mimeFor(to, meta.mime));
+      // Same rule as write(): a text file renamed to x.png was stored as text
+      // labelled image/png.
+      const mime = mimeFor(to, meta.mime);
+      if (!isTextMime(mime)) throw new WorkspaceError('not_text', `${to} is not a text file type. Keep a text extension such as .md or .txt.`);
+      moved = await this.commitText(to, v.content ?? '', source, mime);
     } else {
       // Binary: copy the bytes under the new path so each version owns its
       // object and pruning one path can never break another.
       const data = await this.store.getBlob(v.storagePath ?? '');
       moved = await this.writeBinary(to, data, meta.mime, source);
     }
-    await this.delete(from);
+    // Purge, not soft delete: a move leaves nothing to restore at the old
+    // path, and a soft-deleted binary kept its bytes counted twice.
+    await this.purge(from);
     return moved;
   }
 
@@ -315,7 +349,13 @@ export class Workspace {
     const meta = await this.store.getFile(id);
     if (!meta) throw new WorkspaceError('not_found', `No file at ${path}.`);
     const v = await this.version(path, n);
-    if (meta.kind === 'text') return this.commitText(path, v.content ?? '', source, meta.mime);
+    // Branch on the VERSION's own kind. The path's current kind can differ (a
+    // binary deleted, then a text file renamed onto the path), which restored
+    // an empty text file or failed with "Stored file is missing".
+    if (!v.storagePath) {
+      const mime = meta.kind === 'text' ? meta.mime : mimeFor(path, 'text/plain');
+      return this.commitText(path, v.content ?? '', source, mime);
+    }
     // Copy the bytes into a new version. Pointing the new version at the old
     // object meant pruning the old version later deleted the restored file.
     const data = await this.store.getBlob(v.storagePath ?? '');

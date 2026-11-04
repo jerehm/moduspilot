@@ -94,7 +94,10 @@ export function extractMedia(result: unknown, opts: { allowInline: boolean; scan
   const scanText = (text: string) => {
     if (opts.scanText === false) return;
     for (const m of text.matchAll(/https:\/\/[^\s"'<>)\]\\]+/g)) {
-      push(kindFromUrl(m[0]), m[0]);
+      // Prose punctuation and markdown around a link ("…/a.png." or
+      // "**…/a.png**") is not part of it, and kept the extension check failing.
+      const url = m[0].replace(/[.,;:!?*_~`]+$/, '');
+      push(kindFromUrl(url), url);
     }
   };
 

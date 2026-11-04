@@ -2,7 +2,7 @@
 
 import { useWorkspacePanel } from '@/components/workspace/workspace-context';
 import { wsApi } from '@/lib/workspace-client';
-import { SlashMenu, ResourcePicker, useCatalog, slashQuery, matchPrompts } from './PluginCatalog';
+import { SlashMenu, ResourcePicker, useCatalog, slashQuery, matchPrompts, enterPicksPrompt } from './PluginCatalog';
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -123,8 +123,11 @@ export default function ChatInput({
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (slashMenuShown && e.key === 'Escape') { e.preventDefault(); setSlashClosedFor(input); return; }
-    // Enter on "/name" uses the top prompt instead of sending "/name" to the model.
-    if (slashMenuShown && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setSlashPick(n => n + 1); return; }
+    // Enter on "/name" uses that prompt instead of sending "/name" to the
+    // model, but only when it clearly names one (see enterPicksPrompt).
+    if (slashMenuShown && e.key === 'Enter' && !e.shiftKey && catalog && slash !== null && enterPicksPrompt(catalog.prompts, slash)) {
+      e.preventDefault(); setSlashPick(n => n + 1); return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       e.currentTarget.closest('form')?.requestSubmit();

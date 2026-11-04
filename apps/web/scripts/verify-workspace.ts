@@ -27,6 +27,7 @@ function memStore(): WsStore & { acct: number; blobs: Map<string, Buffer> } {
       versions.get(meta.id)!.set(v.n, v);
     },
     async putMeta(meta: FileMeta) { files.set(meta.id, meta); },
+    async deleteMeta(id: string) { files.delete(id); versions.delete(id); },
     async getVersion(id: string, n: number) { return versions.get(id)?.get(n) ?? null; },
     async listVersions(id: string) { return [...(versions.get(id)?.values() ?? [])]; },
     async deleteVersion(id: string, n: number) { const v = versions.get(id)?.get(n); if (v?.storagePath) blobs.delete(v.storagePath); versions.get(id)?.delete(n); },
@@ -92,7 +93,35 @@ async function main() {
   check('freePath suffixes', await ws.freePath('outputs/a.png') === 'outputs/a (2).png', await ws.freePath('outputs/a.png'));
   const moved = await ws.rename('outputs/a.png', 'outputs/b.png', 'user');
   check('binary rename', moved.path === 'outputs/b.png' && !(await ws.list()).some(f => f.path === 'outputs/a.png'));
-  check('renamed blob is its own object', store.blobs.size === 2);
+  check('rename frees the old copy (one blob, not two)', store.blobs.size === 1, String(store.blobs.size));
+  {
+    // Fresh workspace: the main one above runs at its 5-file cap, and the
+    // quota checks below depend on its exact contents.
+    const st2 = memStore();
+    const ws = new Workspace(st2, { ...DEFAULT_LIMITS });
+    // Panel delete = purge: bytes really come back.
+    await ws.writeBinary('outputs/b.png', Buffer.alloc(500, 1), 'image/png', 'tool');
+    const before = st2.acct;
+    await ws.purge('outputs/b.png');
+    check('purge frees the bytes', st2.acct === before - 500, `${before} -> ${st2.acct}`);
+    check('purge removes the record and blob', !(await ws.list()).some(f => f.path === 'outputs/b.png') && st2.blobs.size === 0);
+    // Editor save against a stale version is refused.
+    const t1 = await ws.write('notes/c.md', 'one', 'user');
+    await ws.write('notes/c.md', 'model edit', 'model');
+    let conflict = false;
+    try { await ws.write('notes/c.md', 'stale save', 'user', t1.version); } catch (e) { conflict = (e as { code?: string }).code === 'conflict'; }
+    check('stale editor save is a conflict', conflict);
+    // Rename a text file to a binary extension is refused.
+    let refused = false;
+    try { await ws.rename('notes/c.md', 'notes/c.png', 'user'); } catch (e) { refused = (e as { code?: string }).code === 'not_text'; }
+    check('text renamed to .png refused', refused);
+    // Restore follows the version's kind, not the path's current kind.
+    await ws.writeBinary('mix/p.png', Buffer.alloc(300, 2), 'image/png', 'tool');
+    await ws.delete('mix/p.png');
+    await ws.write('mix/p.md', 'text', 'user');
+    const r = await ws.restore('mix/p.png', 1, 'user');
+    check('restore of a binary version stays binary', r.kind === 'binary' && r.size === 300, `${r.kind} ${r.size}`);
+  }
 
   // Quotas
   check('5th file allowed', await code(ws.write('f5.txt', 'x', 'model')) === 'ok');
