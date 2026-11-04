@@ -554,6 +554,8 @@ export async function POST(req: Request) {
             // internal address now (DNS rebinding) even if it was public when added.
             await assertPublicUrl(server.url);
             const connectP = connectMcpHost({
+              // maxDuration is 300s: leave ~35s for the model to answer after the last tool.
+              deadlineAt: t0 + 265_000,
               url: server.url,
               authHeader: server.authHeader,
               transport: server.transport,

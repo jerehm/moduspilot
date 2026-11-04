@@ -57,6 +57,12 @@ export async function connectMcpHost(opts: {
   authHeader?: string;
   transport: McpTransport;
   authProvider?: OAuthClientProvider;
+  /**
+   * Epoch ms by which every tool call must be done (the request's own time
+   * limit, minus room to answer). A call gets only what is left, so a long
+   * generation cannot run the function past its limit and cut the reply off.
+   */
+  deadlineAt?: number;
 }): Promise<McpHost> {
   const headers = opts.authHeader ? { Authorization: opts.authHeader } : undefined;
   const url = new URL(opts.url);
@@ -93,13 +99,27 @@ export async function connectMcpHost(opts: {
           } as Parameters<typeof jsonSchema>[0]),
           execute: async (args, options) => {
             options?.abortSignal?.throwIfAborted();
+            const left = opts.deadlineAt ? opts.deadlineAt - Date.now() : 280_000;
+            if (left < 10_000) {
+              return {
+                isError: true,
+                content: [{ type: 'text', text: 'Out of time on this turn. Tell the user what finished so far and that they can say "continue" to pick it up.' }],
+              };
+            }
             return client.callTool(
               { name: t.name, arguments: args as Record<string, unknown> },
               undefined,
               // Generation servers block for minutes and stream progress; the
               // SDK's 60s default would cut them off. The route's maxDuration
               // is the real ceiling.
-              { signal: options?.abortSignal, timeout: 280_000, resetTimeoutOnProgress: true, onprogress: () => {} },
+              {
+                signal: options?.abortSignal,
+                timeout: Math.min(280_000, left),
+                // Progress may extend a call, but never past the deadline.
+                resetTimeoutOnProgress: true,
+                maxTotalTimeout: Math.min(280_000, left),
+                onprogress: () => {},
+              },
             );
           },
         });
