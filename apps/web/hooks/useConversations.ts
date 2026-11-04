@@ -18,6 +18,8 @@ export interface Conversation {
   shareId?: string;
   projectId?: string;
   goalId?: string;
+  /** Files beside this chat (lib/workspace.ts). Absent on chats made before 11-03: use the id. */
+  workspaceId?: string;
   /** MODUS-generated (daily briefing, proactive nudge, check-in) vs. a real user chat. */
   system?: boolean;
   /** Pinned chats sort into their own group above Today, newest first. */
@@ -55,6 +57,7 @@ export function useConversations(uid: string | null) {
             shareId: d.data().shareId as string | undefined,
             projectId: d.data().projectId as string | undefined,
             goalId: d.data().goalId as string | undefined,
+            workspaceId: d.data().workspaceId as string | undefined,
             system: !!(d.data().system || d.data().briefing || d.data().checkin),
             pinned: d.data().pinned ?? false,
             modelChoice: d.data().modelChoice as string | undefined,
@@ -73,7 +76,7 @@ export function useConversations(uid: string | null) {
     return unsub;
   }, [uid]);
 
-  const createConversation = useCallback(async (modelChoice?: string): Promise<string> => {
+  const createConversation = useCallback(async (modelChoice?: string, workspaceId?: string): Promise<string> => {
     if (!uid) return '';
     const ref = await addDoc(collection(db, 'users', uid, 'conversations'), {
       title: 'New chat',
@@ -84,6 +87,8 @@ export function useConversations(uid: string | null) {
       // Carry a model the user picked while the chat was still a draft (no doc
       // yet), so the pick is not lost when the draft becomes a real conversation.
       ...(modelChoice ? { modelChoice } : {}),
+      // The draft's workspace, so files written on the first turn stay with it.
+      ...(workspaceId ? { workspaceId } : {}),
     });
     return ref.id;
   }, [uid]);

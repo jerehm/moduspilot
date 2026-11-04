@@ -1,6 +1,9 @@
 import { streamText, StreamData, convertToCoreMessages } from 'ai';
 import { summarizeSteps } from '@/lib/chat/tool-activity';
 import { withToolHeartbeat } from '@/lib/chat/tool-heartbeat';
+import { isWorkspaceId } from '@/lib/workspace';
+import { openWorkspace } from '@/lib/workspace-store';
+import { workspaceTools, workspacePromptBlock, WORKSPACE_SERVER_LABEL } from '@/lib/chat/workspace-tools';
 import type { CoreMessage } from 'ai';
 import { MODUS_SYSTEM_PROMPT, SCREEN_ASSIST_SYSTEM_PROMPT, looksLikePromptExtraction, PROMPT_EXTRACTION_REMINDER, PROJECT_CHAT_RULES } from '@/lib/claude';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
@@ -163,6 +166,8 @@ export async function POST(req: Request) {
        * network round trip (Firestore, Google, Pinecone) that the user waits on.
        */
       screenMode?: boolean;
+      /** The chat's workspace (lib/workspace.ts). */
+      workspaceId?: string;
     };
 
     // req.json() rejects on a malformed body; bodyPromise swallows that into null.
@@ -628,6 +633,35 @@ export async function POST(req: Request) {
       }
     })() : Promise.resolve();
 
+    // The chat's workspace (lib/workspace.ts). Same gates as MCP minus the
+    // personal-data one: "save this email as a note" is a personal-data query
+    // that still wants a file. Runs beside MCP discovery, never after it.
+    const workspaceId = isWorkspaceId(body.workspaceId) ? body.workspaceId : null;
+    let workspaceBlock = '';
+    const workspaceSetupPromise: Promise<void> = uid && workspaceId && !isSmallTalk && !isContentless ? (async () => {
+      try {
+        const ws = openWorkspace(uid, workspaceId);
+        const files = await Promise.race([
+          ws.list(),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('workspace list timeout')), 3000)),
+        ]);
+        // Attach only when there is something to work with or the message reads
+        // like file work. Tools on every turn would make Auto swap its cheap
+        // no-tools default (Llama) out of nearly every general question.
+        const fileIntent = /\b(files?|folder|save|saved|write|wrote|draft|document|doc|notes?|plan|outline|spec|readme|code|script|html|csv|json|markdown|md|edit|rewrite|update|append|rename|delete|upload(ed)?|attach(ed|ment)?|outputs?|workspace)\b/i.test(queryText);
+        if (files.length === 0 && !fileIntent) return;
+        const tools = workspaceTools(ws);
+        makeToolErrorsNonFatal(tools, (toolName, message) => console.warn(`[chat] workspace tool ${toolName} failed (recovered): ${message}`));
+        for (const name of Object.keys(tools)) mcpServerByTool[name] = WORKSPACE_SERVER_LABEL;
+        // A connector with a same-named tool (a filesystem MCP server) wins,
+        // because the MCP merge spreads over this.
+        mcpTools = { ...tools, ...mcpTools };
+        workspaceBlock = workspacePromptBlock(files.map(f => f.path));
+      } catch (e) {
+        console.error('[chat] workspace setup failed:', String(e));
+      }
+    })() : Promise.resolve();
+
     // Live Google data only when relevant to the query
     let gmailBlock = '';
     let calendarBlock = '';
@@ -792,7 +826,7 @@ export async function POST(req: Request) {
     // When connector tools are live for this message, an Auto pick without tool
     // support is swapped for the tool-capable default. A manual pick stands.
     if (wasAutoRouted && forcedModelId && !modelSupportsTools(forcedModelId)) {
-      await mcpSetupPromise;
+      await Promise.all([mcpSetupPromise, workspaceSetupPromise]);
       if (Object.keys(mcpTools).length > 0 && canUseModel(FREE_DEFAULT, userData.plan) && modelSupportsTools(FREE_DEFAULT)) {
         console.log(`[route] tools live: ${forcedModelId} cannot call tools, using ${FREE_DEFAULT}`);
         forcedModelId = FREE_DEFAULT;
@@ -908,7 +942,7 @@ export async function POST(req: Request) {
     // Collect MCP tools (started before the context block above, so by now this
     // is usually already resolved). Must settle before streamText: mcpTools feeds
     // the call, and mcpClients is what onFinish/onError close.
-    await mcpSetupPromise;
+    await Promise.all([mcpSetupPromise, workspaceSetupPromise]);
     console.log(`[chat] timing: context=${tContext - t0}ms mcp+total=${Date.now() - t0}ms model=${resolved.modelId}${leanContext ? ' (screen mode: lean context)' : ''}`);
 
     // Layer 2: if the latest message looks like a prompt-extraction / override
@@ -1056,7 +1090,7 @@ export async function POST(req: Request) {
     const activeMcpTools = toolsUsable
       ? withToolHeartbeat(mcpTools, () => { if (!streamDataClosed) streamData.append({ modusHeartbeat: Date.now() }); })
       : {};
-    const activeMcpBlock = toolsUsable ? mcpBlock : '';
+    const activeMcpBlock = toolsUsable ? mcpBlock + workspaceBlock : '';
     if (!toolsUsable && Object.keys(mcpTools).length > 0) {
       console.log(`[chat] tools dropped: ${resolved.modelId} cannot take function tools — answering without them`);
     }

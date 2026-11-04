@@ -270,6 +270,8 @@ function ProjectDetailPageContent() {
       projectContext: project
         ? { id: project.id, title: project.title, description: project.description, resources: project.resources, activeChatId }
         : undefined,
+      // Every chat in a project shares one workspace, so files outlive the thread.
+      workspaceId: `project-${id}`,
     },
     onFinish: chatSafety.onFinish,
     onError: chatSafety.onError,

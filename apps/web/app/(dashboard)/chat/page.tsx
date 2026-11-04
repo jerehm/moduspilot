@@ -68,6 +68,14 @@ function ChatContent() {
   // draft). It rides here across the draft→real remount so createConversation
   // can persist it onto the new doc; cleared once the doc exists.
   const draftModelRef = useRef<string | null>(null);
+  // A draft's workspace id. A chat has no doc (so no id) until its first turn
+  // finishes, but the model may write files on that turn; this id is carried
+  // onto the doc at creation. createdWorkspaceRef bridges the moment after
+  // creation before the snapshot carries the field.
+  const [draftWorkspaceId, setDraftWorkspaceId] = useState<string>(() => crypto.randomUUID());
+  const draftWorkspaceRef = useRef(draftWorkspaceId);
+  useEffect(() => { draftWorkspaceRef.current = draftWorkspaceId; }, [draftWorkspaceId]);
+  const [createdWorkspaces, setCreatedWorkspaces] = useState<Record<string, string>>({});
 
   // Show toast when returning from OAuth with ?connected= param
   useEffect(() => {
@@ -141,6 +149,7 @@ function ChatContent() {
     setInFlightMessages([]); // never inherit a previous chat's in-flight messages
     pendingConvIdRef.current = null;
     draftModelRef.current = null; // a new draft starts from the account default
+    setDraftWorkspaceId(crypto.randomUUID());
     setActiveId(null);
     setIsDraft(true);
     setConvDrawerOpen(false);
@@ -210,7 +219,10 @@ function ChatContent() {
       persisting = true;
       try {
         if (!convId) {
-          convId = await createConversation(chosenModel);
+          const wsForDraft = draftWorkspaceRef.current;
+          convId = await createConversation(chosenModel, wsForDraft);
+          const createdId = convId;
+          setCreatedWorkspaces(prev => ({ ...prev, [createdId]: wsForDraft }));
           if (viewEpoch.current === epoch) {
             pendingConvIdRef.current = convId;
             setIsDraft(false);
@@ -431,6 +443,10 @@ function ChatContent() {
           <ChatWindow
             key={activeId ?? (isGuest ? 'guest' : `draft:${viewEpoch.current}`)}
             conversationId={activeId}
+            workspaceId={
+              activeConversation?.workspaceId
+              ?? (activeId ? createdWorkspaces[activeId] ?? activeId : draftWorkspaceId)
+            }
             initialMessages={activeConversation?.messages?.length ? activeConversation.messages : inFlightMessages}
             initialInput={initialQuery}
             onMessagesChange={isGuest ? undefined : handleMessagesChange}

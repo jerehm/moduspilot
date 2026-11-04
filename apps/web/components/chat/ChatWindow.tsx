@@ -158,6 +158,8 @@ function PromptIcon({ name }: { name: PromptIconName }) {
 
 interface Props {
   conversationId: string | null;
+  /** Files beside this chat. Sent with every turn so the model's file tools know where to work. */
+  workspaceId?: string;
   initialMessages?: Message[];
   initialInput?: string;
   onMessagesChange?: (messages: Message[], title?: string) => void;
@@ -188,6 +190,7 @@ interface Props {
 
 export default function ChatWindow({
   conversationId,
+  workspaceId,
   initialMessages = [],
   initialInput,
   onMessagesChange,
@@ -443,6 +446,7 @@ export default function ChatWindow({
       presets: activePresetTexts,
       briefingHour: briefingHour ?? 7,
       briefingTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || briefingTimezone || 'UTC',
+      ...(workspaceId ? { workspaceId } : {}),
     },
     onFinish: (message) => {
       streamCompletedRef.current = true;
