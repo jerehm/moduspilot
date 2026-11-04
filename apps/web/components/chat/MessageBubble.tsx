@@ -7,6 +7,7 @@ import OptionsCard from './OptionsCard';
 import ImageCard from './ImageCard';
 import DocumentCard from './DocumentCard';
 import ChartCard from './ChartCard';
+import ToolActivity, { toolCallsFor } from './ToolActivity';
 import MarkdownMessage from './MarkdownMessage';
 import AiCheckButton from './AiCheckButton';
 import { blockProgress } from '@/lib/chat/block-progress';
@@ -195,6 +196,7 @@ export default function MessageBubble({
   }
 
   const rawText = extractTextContent(message.content);
+  const toolCalls = toolCallsFor(message);
 
   // '```options' is not a substring of '```draft_options' (the backticks sit
   // directly before the tag), so these two never collide.
@@ -225,6 +227,7 @@ export default function MessageBubble({
       <div className="max-w-[85%] min-w-0 space-y-3">
         {webSearchCount > 0 && <WebSearchChip count={webSearchCount} />}
         {routedModel && <RoutedChip modelId={routedModel} replacedModel={replacedModel} manualPick={manualPick} />}
+        <ToolActivity calls={toolCalls} />
         {parts.map((part, i) =>
           part.type === 'approval' ? (
             // messageId:blockIndex — stable across reloads and tabs because the

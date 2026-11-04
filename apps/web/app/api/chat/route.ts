@@ -1,4 +1,5 @@
 import { streamText, experimental_createMCPClient, StreamData, convertToCoreMessages } from 'ai';
+import { summarizeSteps } from '@/lib/chat/tool-activity';
 import type { CoreMessage } from 'ai';
 import { MODUS_SYSTEM_PROMPT, SCREEN_ASSIST_SYSTEM_PROMPT, looksLikePromptExtraction, PROMPT_EXTRACTION_REMINDER, PROJECT_CHAT_RULES } from '@/lib/claude';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
@@ -481,6 +482,8 @@ export async function POST(req: Request) {
     type McpClient = Awaited<ReturnType<typeof experimental_createMCPClient>>;
     const mcpClients: McpClient[] = [];
     let mcpTools: Record<string, unknown> = {};
+    // toolName → connector name, so the chat can say "used Pika" not "ran a tool".
+    const mcpServerByTool: Record<string, string> = {};
     let mcpBlock = '';
     // "yoyo" must never reach a documentation tool. MCP tools were attached to
     // EVERY message regardless of what it said or which model answered it, so a
@@ -596,6 +599,7 @@ export async function POST(req: Request) {
             console.warn(`[chat] MCP tool ${server.name}/${toolName} failed (recovered): ${message}`),
           );
           mcpTools = { ...mcpTools, ...safeTools };
+          for (const t of Object.keys(safeTools)) mcpServerByTool[t] = server.name;
           toolNamesByServer.push(`${server.name}: ${Object.keys(tools).join(', ')}`);
           mcpClients.push(client);
         }
@@ -955,6 +959,11 @@ export async function POST(req: Request) {
     if (webSearchCount > 0) {
       streamData.appendMessageAnnotation({ modusWebSearch: webSearchCount });
     }
+    // Which connector each tool belongs to. Sent up front so the live tool row
+    // can name the connector while the call is still running.
+    if (Object.keys(mcpServerByTool).length > 0 && modelSupportsTools(resolved.modelId)) {
+      streamData.appendMessageAnnotation({ modusToolServers: mcpServerByTool });
+    }
 
     let servedModelId = resolved.modelId;
     let streamDataClosed = false;
@@ -1100,6 +1109,12 @@ export async function POST(req: Request) {
           );
         } else {
           console.log(`[chat] finish: reason=${finishReason} chars=${text.length} model=${servedModelId}`);
+        }
+        // Save what the tools did. useConversations persists content and
+        // annotations only, so without this every tool call vanishes on reload.
+        const toolRecords = summarizeSteps(steps ?? [], mcpServerByTool);
+        if (toolRecords.length > 0) {
+          streamData.appendMessageAnnotation({ modusTools: toolRecords } as unknown as Parameters<typeof streamData.appendMessageAnnotation>[0]);
         }
         // Close MCP clients
         for (const client of mcpClients) {
