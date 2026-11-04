@@ -95,12 +95,31 @@ export function openWorkspace(uid: string, ws: string): Workspace {
   return new Workspace(firestoreWsStore(uid, ws));
 }
 
-/** Removes every workspace file, version and blob for a user (account / history wipe). */
-export async function purgeWorkspaces(uid: string): Promise<{ workspaces: number }> {
+/**
+ * Removes workspaces for a user: Firestore files and versions, Storage blobs and
+ * the usage counter. `keep` spares some (Delete all chats keeps project
+ * workspaces, which belong to projects, not chats). Plugin widget results go
+ * with the chats either way.
+ */
+export async function purgeWorkspaces(uid: string, opts: { keep?: (wsId: string) => boolean } = {}): Promise<{ workspaces: number }> {
   const wsCol = adminDb.collection('users').doc(uid).collection('workspaces');
-  const list = await wsCol.listDocuments();
-  for (const ref of list) await adminDb.recursiveDelete(ref.path);
-  await adminBucket().deleteFiles({ prefix: `workspaces/${uid}/` }).catch(e => console.error('[workspace] blob purge failed:', String(e)));
-  await adminDb.collection('workspaceUsage').doc(uid).delete().catch(() => {});
-  return { workspaces: list.length };
+  const refs = (await wsCol.listDocuments()).filter(r => !opts.keep?.(r.id));
+  const bucket = adminBucket();
+  for (const ref of refs) {
+    await adminDb.recursiveDelete(ref.path);
+    await bucket.deleteFiles({ prefix: `workspaces/${uid}/${ref.id}/` }).catch(e => console.error('[workspace] blob purge failed:', String(e)));
+  }
+  const tr = adminDb.collection('users').doc(uid).collection('toolResults');
+  await tr.firestore.recursiveDelete(tr).catch(() => {});
+  // Recount what is left rather than guess: kept workspaces still use bytes.
+  let remaining = 0;
+  if (opts.keep) {
+    for (const ref of await wsCol.listDocuments()) {
+      const snap = await ref.collection('files').get();
+      for (const d of snap.docs) if (!d.data().deleted) remaining += Number(d.data().size ?? 0);
+    }
+  }
+  const usage = adminDb.collection('workspaceUsage').doc(uid);
+  if (remaining > 0) await usage.set({ bytes: remaining }); else await usage.delete().catch(() => {});
+  return { workspaces: refs.length };
 }

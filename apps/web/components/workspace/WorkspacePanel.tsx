@@ -217,8 +217,10 @@ function FilePreview({ ws, path, refreshKey, onChanged, onGone }: { ws: string; 
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-border text-xs">
-        <p className="flex-1 min-w-0 truncate text-muted"><span className="text-text">{path}</span> · v{meta.version} · {fmtSize(meta.size)} · {fmtAge(meta.updatedAt)}</p>
+      {/* Path on its own line, actions wrap under it: the panel is narrow on
+          phones and in the project page's two-column layout. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2 border-b border-border text-xs">
+        <p className="w-full truncate text-muted"><span className="text-text">{path}</span> · v{meta.version} · {fmtSize(meta.size)} · {fmtAge(meta.updatedAt)}</p>
         {isText && !editing && <button onClick={() => { setDraft(content ?? ''); setEditing(true); }} className="text-brand hover:underline">Edit</button>}
         {(isHtml || isMd) && !editing && <button onClick={() => setShowSource(s => !s)} className="text-muted hover:text-text">{showSource ? 'Preview' : 'Source'}</button>}
         <button onClick={openHistory} className={history ? 'text-text' : 'text-muted hover:text-text'}>History</button>
@@ -288,6 +290,43 @@ function FilePreview({ ws, path, refreshKey, onChanged, onGone }: { ws: string; 
           <MarkdownMessage>{content ?? ''}</MarkdownMessage>
         ) : (
           <pre className="rounded-lg border border-border bg-panel p-3 text-[12.5px] font-mono leading-relaxed text-text whitespace-pre-wrap break-words">{content}</pre>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Standalone browser (project page) ────────────────────────────────────────
+
+/**
+ * Files and preview side by side, outside a chat. The project page uses it for
+ * the workspace every chat in that project shares.
+ */
+export function FilesBrowser({ workspaceId }: { workspaceId: string }) {
+  const [files, setFiles] = useState<FileMeta[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
+  useEffect(() => {
+    let alive = true;
+    wsApi.list(workspaceId)
+      .then(f => { if (alive) { setFiles(f); setError(null); } })
+      .catch(e => { if (alive) setError(e instanceof Error ? e.message : 'Could not load files'); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [workspaceId, refreshKey]);
+  return (
+    <div className="grid md:grid-cols-[minmax(220px,300px)_1fr] gap-4 min-h-[420px]">
+      <div className="bg-panel border border-border rounded-xl overflow-hidden h-[60vh] md:h-[70vh]">
+        <FilesTab ws={workspaceId} files={files} loading={loading} error={error} selected={selected ?? undefined} onOpen={setSelected} onRefresh={() => { setLoading(true); refresh(); }} />
+      </div>
+      <div className="bg-panel border border-border rounded-xl overflow-hidden h-[60vh] md:h-[70vh]">
+        {selected ? (
+          <FilePreview key={selected} ws={workspaceId} path={selected} refreshKey={refreshKey} onChanged={refresh} onGone={() => setSelected(null)} />
+        ) : (
+          <p className="text-sm text-muted p-6">Pick a file to preview it. Every chat in this project reads and writes these files.</p>
         )}
       </div>
     </div>

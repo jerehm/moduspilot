@@ -1,5 +1,6 @@
 'use client';
 
+import { FilesBrowser } from '@/components/workspace/WorkspacePanel';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -19,7 +20,7 @@ import { useConversationModel } from '@/hooks/useConversationModel';
 import ModelSwitcher from '@/components/chat/ModelSwitcher';
 import { motion, AnimatePresence } from 'framer-motion';
 
-type ProjectTab = 'overview' | 'resources' | 'tasks' | 'notes';
+type ProjectTab = 'overview' | 'resources' | 'tasks' | 'notes' | 'files';
 type NoteType = 'win' | 'blocker' | 'idea' | 'reflection';
 type ResourceType = 'github' | 'notion' | 'slack' | 'drive' | 'url';
 
@@ -636,6 +637,7 @@ function ProjectDetailPageContent() {
               { key: 'resources',  label: 'Resources' },
               { key: 'tasks',      label: 'Tasks' },
               { key: 'notes',      label: 'Notes' },
+              { key: 'files',      label: 'Files' },
             ] as const).map(t => (
               <button
                 key={t.key}
@@ -1104,6 +1106,9 @@ function ProjectDetailPageContent() {
               )}
             </div>
           )}
+
+          {/* ── Files Tab: the workspace every chat in this project shares ──────── */}
+          {activeTab === 'files' && <FilesBrowser workspaceId={`project-${id}`} />}
 
           {/* ── Notes Tab ─────────────────────────────────────────────────────── */}
           {activeTab === 'notes' && (

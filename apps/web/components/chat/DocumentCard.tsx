@@ -6,6 +6,14 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { markdownToHtml, printDocument, docKey } from '@/lib/document';
 import DocumentEditor from './DocumentEditor';
+import { useWorkspacePanel } from '@/components/workspace/workspace-context';
+import { wsApi } from '@/lib/workspace-client';
+
+/** documents/<title>.md, kept to safe filename characters. */
+function docPath(title: string): string {
+  const name = title.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Document';
+  return `documents/${name}.md`;
+}
 
 interface DocPayload { title?: string; markdown?: string }
 
@@ -25,6 +33,22 @@ export default function DocumentCard({ raw }: { raw: string }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
+  const ws = useWorkspacePanel();
+  const [opening, setOpening] = useState(false);
+
+  // Move the document into the chat's workspace, where it gets versions,
+  // history and the side panel editor. The first open writes it; later opens
+  // reuse the file, so edits made in Files are what you see next time.
+  async function openInFiles() {
+    if (!ws?.workspaceId) return;
+    const path = docPath(title);
+    setOpening(true);
+    try {
+      await wsApi.read(ws.workspaceId, path).catch(async () => { await wsApi.write(ws.workspaceId!, path, markdown); });
+      ws.openFile(path);
+    } catch { /* the card still works on its own */ }
+    finally { setOpening(false); }
+  }
   const loadedRef = useRef(false);
 
   // Load any persisted edits for this document once.
@@ -94,6 +118,9 @@ export default function DocumentCard({ raw }: { raw: string }) {
 
         <div className="px-4 py-2.5 flex items-center gap-3 border-t border-border">
           <button onClick={() => setEditing(true)} className="text-xs font-semibold text-brand hover:underline">Edit</button>
+          {ws?.workspaceId && (
+            <button onClick={openInFiles} disabled={opening} className="text-xs text-muted hover:text-text transition-colors disabled:opacity-50">{opening ? 'Opening…' : 'Open in Files'}</button>
+          )}
           <button onClick={() => printDocument(title, markdown)} className="text-xs text-muted hover:text-text transition-colors">Download PDF</button>
           <button onClick={copy} className="text-xs text-muted hover:text-text transition-colors">{copied ? 'Copied' : 'Copy text'}</button>
         </div>

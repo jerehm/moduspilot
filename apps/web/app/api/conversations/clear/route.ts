@@ -1,5 +1,6 @@
 import { requireAuth } from '@/lib/api-auth';
 import { adminDb } from '@/lib/firebase-admin';
+import { purgeWorkspaces } from '@/lib/workspace-store';
 
 /**
  * Permanently delete every conversation for the signed-in user — the "Delete
@@ -30,8 +31,11 @@ export async function DELETE(req: Request) {
     // select() with no fields fetches ids only — just for the cleared count.
     const snap = await col.select().get();
     await col.firestore.recursiveDelete(col);
-    console.log(`[conversations/clear] uid=${uid} cleared=${snap.size}`);
-    return Response.json({ ok: true, cleared: snap.size });
+    // The chats' files go too (uploads, plugin outputs, documents). Project
+    // workspaces stay: they belong to projects, which this does not delete.
+    const { workspaces } = await purgeWorkspaces(uid, { keep: id => id.startsWith('project-') });
+    console.log(`[conversations/clear] uid=${uid} cleared=${snap.size} workspaces=${workspaces}`);
+    return Response.json({ ok: true, cleared: snap.size, workspaces });
   } catch (e) {
     console.error('[conversations/clear] failed', e);
     return Response.json({ error: 'clear_failed' }, { status: 500 });
