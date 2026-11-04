@@ -80,7 +80,7 @@ function kindFromUrl(url: string): ToolMedia['kind'] | null {
  * and plain JSON or text that mentions media URLs, which is how most generation
  * servers report a finished asset.
  */
-export function extractMedia(result: unknown, opts: { allowInline: boolean }): ToolMedia[] {
+export function extractMedia(result: unknown, opts: { allowInline: boolean; scanText?: boolean }): ToolMedia[] {
   const out: ToolMedia[] = [];
   const seen = new Set<string>();
   const push = (kind: ToolMedia['kind'] | null, url: string) => {
@@ -92,6 +92,7 @@ export function extractMedia(result: unknown, opts: { allowInline: boolean }): T
   };
 
   const scanText = (text: string) => {
+    if (opts.scanText === false) return;
     for (const m of text.matchAll(/https:\/\/[^\s"'<>)\]\\]+/g)) {
       push(kindFromUrl(m[0]), m[0]);
     }

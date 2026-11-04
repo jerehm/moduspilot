@@ -27,12 +27,16 @@ const ws = {
 } as unknown as Parameters<typeof saveToolMedia>[0];
 
 async function main() {
-  const urls = ['evil.png', 'hop.png', 'ok.png', 'page.png'].map(n => `https://example.com/${n}`);
+  const urls = ['evil.png', 'hop.png', 'ok.png'].map(n => `https://example.com/${n}`);
   const rec: ToolCallRecord = { id: 'c1', tool: 'generate_image', server: 'Pika', state: 'done', media: [] };
-  await saveToolMedia(ws, [{ toolResults: [{ toolCallId: 'c1', result: { content: [
-    { type: 'text', text: urls.join(' ') },
-    { type: 'image', data: Buffer.from([9, 9]).toString('base64'), mimeType: 'image/png' },
-  ] } }] }], [rec]);
+  const rec3: ToolCallRecord = { id: 'c3', tool: 'generate_image', server: 'Pika', state: 'done', media: [] };
+  await saveToolMedia(ws, [{ toolResults: [
+    { toolCallId: 'c1', result: { content: [
+      { type: 'text', text: urls.join(' ') },
+      { type: 'image', data: Buffer.from([9, 9]).toString('base64'), mimeType: 'image/png' },
+    ] } },
+    { toolCallId: 'c3', result: { content: [{ type: 'text', text: 'https://example.com/page.png' }] } },
+  ] }], [rec, rec3]);
   check('redirect to metadata IP never fetched', !fetched.some(u => u.includes('169.254')), fetched);
   check('evil.png not saved', !written.some(p => p.includes('evil')), written);
   check('public redirect hop followed and saved', written.includes('outputs/pika/hop.png') && fetched.includes('https://example.com/real.png'), written);
@@ -40,6 +44,13 @@ async function main() {
   check('html served as .png refused', !written.some(p => p.includes('page')), written);
   check('inline image saved', written.some(p => /make|generate-image/.test(p)), written);
   check('record lists saved paths', (rec.saved ?? []).length === written.length, rec.saved);
+  // A docs-style result with many image links saves none of them.
+  written.length = 0; fetched.length = 0;
+  const docs: ToolCallRecord = { id: 'c2', tool: 'read_wiki', server: 'DeepWiki', state: 'done', media: [] };
+  const many = Array.from({ length: 6 }, (_, i) => `https://example.com/ok.png?shot=${i}`).join(' ');
+  await saveToolMedia(ws, [{ toolResults: [{ toolCallId: 'c2', result: { content: [{ type: 'text', text: `README ${many}` }] } }] }], [docs]);
+  check('docs result with 6 image links saves nothing', written.length === 0 && fetched.length === 0, written);
+
   console.log(failures ? `\n${failures} failed.` : '\nAll checks passed.'); process.exit(failures ? 1 : 0);
 }
 main();

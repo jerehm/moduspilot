@@ -90,9 +90,21 @@ function touch(id: string) {
   l.idle = setTimeout(() => { log.info(`[local-mcp] ${id} idle, stopping`); void stop(id); }, IDLE_MS);
 }
 
+// One start per server at a time. toolDefs runs on every window focus, and two
+// quick focuses used to spawn the same server twice, leaving an orphan process.
+const starting = new Map<string, Promise<Client>>();
+
 async function connect(cfg: LocalMcpServerConfig): Promise<Client> {
   const have = live.get(cfg.id);
   if (have) { touch(cfg.id); return have.client; }
+  const pending = starting.get(cfg.id);
+  if (pending) return pending;
+  const p = start(cfg).finally(() => starting.delete(cfg.id));
+  starting.set(cfg.id, p);
+  return p;
+}
+
+async function start(cfg: LocalMcpServerConfig): Promise<Client> {
   const transport = new StdioClientTransport({
     command: cfg.command,
     args: cfg.args,
@@ -101,7 +113,13 @@ async function connect(cfg: LocalMcpServerConfig): Promise<Client> {
   });
   transport.stderr?.on('data', (d: Buffer) => log.info(`[local-mcp:${cfg.name}] ${String(d).trim().slice(0, 500)}`));
   const client = new Client({ name: 'MODUS Desktop', version: '1.0.0' });
-  await client.connect(transport);
+  try {
+    await client.connect(transport);
+  } catch (e) {
+    // A server that fails to start must not leave its process behind.
+    await transport.close().catch(() => {});
+    throw e;
+  }
   transport.onclose = () => { live.delete(cfg.id); };
   live.set(cfg.id, { client, transport });
   touch(cfg.id);

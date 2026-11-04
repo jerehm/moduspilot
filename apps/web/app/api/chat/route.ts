@@ -27,7 +27,7 @@ import {
 } from '@/lib/chat/limits';
 import { FREE_MAX_MESSAGE_CHARS, FREE_HISTORY_CHAR_BUDGET } from '@/lib/constants';
 import { resolveChatModel, chatFallbackChain, createFallbackModel, silentStreamBackup, isPremiumModel, modelSupportsTools } from '@/lib/chat/model';
-import { routeTask } from '@/lib/chat/auto-route';
+import { routeTask, pickModel } from '@/lib/chat/auto-route';
 import { canUseModel, FREE_DEFAULT } from '@/lib/models';
 import {
   needsEmailCtx,
@@ -712,6 +712,8 @@ export async function POST(req: Request) {
     // Surfaced to the client (x-modus-auto header) so it can show a
     // "MODUS routed this to <model>" chip above the answer.
     let wasAutoRouted = false;
+    // The task category Auto chose, so a tools swap can stay in the same lane.
+    let routedCategory: Parameters<typeof pickModel>[0] | null = null;
     // The "+" menu web-search toggle forces it for this message; Auto-routing can also.
     let forceWebSearch = body.webSearch === true;
     // A model the user explicitly asked for that their plan cannot run. Recorded
@@ -725,6 +727,7 @@ export async function POST(req: Request) {
         wasAutoRouted = true;
         const routed = await routePromise;
         forcedModelId = routed.modelId;
+        routedCategory = routed.category;
         // 🚨 OR, never assign. The user's "+ → Web search" toggle arrives as
         // body.webSearch and was being OVERWRITTEN here by the router's own
         // opinion, which is false for every category except 'research'. So on
@@ -856,9 +859,16 @@ export async function POST(req: Request) {
     // support is swapped for the tool-capable default. A manual pick stands.
     if (wasAutoRouted && forcedModelId && !modelSupportsTools(forcedModelId)) {
       await Promise.all([mcpSetupPromise, workspaceSetupPromise]);
-      if (Object.keys(mcpTools).length > 0 && canUseModel(FREE_DEFAULT, userData.plan) && modelSupportsTools(FREE_DEFAULT)) {
-        console.log(`[route] tools live: ${forcedModelId} cannot call tools, using ${FREE_DEFAULT}`);
-        forcedModelId = FREE_DEFAULT;
+      if (Object.keys(mcpTools).length > 0) {
+        // Best tool-capable model for the SAME task on this plan, not a blanket
+        // drop to the free default: a PILOT code question was falling from
+        // gpt-6.1-sol to flash-lite just because file tools were attached.
+        const better = routedCategory ? pickModel(routedCategory, userData.plan, saverMode, modelSupportsTools) : '';
+        const swap = better || (canUseModel(FREE_DEFAULT, userData.plan) && modelSupportsTools(FREE_DEFAULT) ? FREE_DEFAULT : '');
+        if (swap && swap !== forcedModelId) {
+          console.log(`[route] tools live: ${forcedModelId} cannot call tools, using ${swap}`);
+          forcedModelId = swap;
+        }
       }
     }
     const resolved = resolveChatModel(userData, { hasImage, modelId: forcedModelId });

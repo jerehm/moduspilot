@@ -81,7 +81,14 @@ export async function saveToolMedia(
     for (const raw of step.toolResults as { toolCallId: string; result: unknown }[]) {
       const rec = byId.get(raw.toolCallId);
       if (!rec || rec.server === 'Files' || rec.state !== 'done') continue;
-      extractMedia(raw.result, { allowInline: true }).forEach((m, i) => jobs.push({ rec, url: m.url, i }));
+      // Structured media parts always count. Links found in TEXT only count when
+      // there are a few, the way a generator reports its output; a docs tool
+      // returning a README full of screenshots is not producing media.
+      const structured = extractMedia(raw.result, { allowInline: true, scanText: false });
+      const all = extractMedia(raw.result, { allowInline: true });
+      const fromText = all.filter(m => !structured.some(s => s.url === m.url));
+      const picked = [...structured, ...(fromText.length <= 3 ? fromText : [])];
+      picked.forEach((m, i) => jobs.push({ rec, url: m.url, i }));
     }
   }
   if (jobs.length === 0) return;

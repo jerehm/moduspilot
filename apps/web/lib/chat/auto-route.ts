@@ -83,14 +83,20 @@ const CLASSIFIER_SYSTEM =
   `- general: casual conversation, quick questions, task/calendar/personal-assistant actions\n` +
   `Reply with ONLY the single category word, lowercase, nothing else.`;
 
-export function pickModel(category: TaskCategory, plan: string | null | undefined, saver = false): string {
+export function pickModel(
+  category: TaskCategory,
+  plan: string | null | undefined,
+  saver = false,
+  /** Only consider models this accepts (e.g. ones that can call tools). */
+  accept?: (id: string) => boolean,
+): string {
   const ep = effectivePlan(plan);
   const prefs = saver ? SAVER_PREFERENCE[category] : CATEGORY_PREFERENCE[category];
   for (const id of prefs) {
     const model = PLATFORM_MODELS.find(m => m.id === id);
-    if (model && model.plans.includes(ep)) return id;
+    if (model && model.plans.includes(ep) && (!accept || accept(id))) return id;
   }
-  return LLAMA;
+  return accept && !accept(LLAMA) ? '' : LLAMA;
 }
 
 export interface RouteResult {
