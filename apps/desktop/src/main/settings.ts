@@ -140,6 +140,20 @@ interface DesktopSettings {
    * in testing.
    */
   deviceId?: string;
+  /** The one folder the model may work in (absolute, realpath). Picked natively. */
+  localFolder?: string | null;
+  /** Local (stdio) MCP servers the user added, each confirmed in a native dialog. */
+  localMcpServers?: LocalMcpServerConfig[];
+  /** serverId -> tool names the user chose "Always allow" for. */
+  localMcpAllowed?: Record<string, string[]>;
+}
+
+export interface LocalMcpServerConfig {
+  id: string;
+  name: string;
+  command: string;
+  args: string[];
+  env?: Record<string, string>;
 }
 
 function settingsFile(): string {
@@ -227,4 +241,31 @@ export function initLaunchAtLogin(): void {
   app.setLoginItemSettings({ openAtLogin: true });
   write({ ...s, loginItemInitialized: true });
   log.info('[settings] enabled launch-at-login by default (first run)');
+}
+
+export function getLocalFolder(): string | null {
+  return read().localFolder ?? null;
+}
+
+export function setLocalFolder(folder: string | null): void {
+  const s = read();
+  write({ ...s, localFolder: folder });
+}
+
+export function getLocalMcpServers(): LocalMcpServerConfig[] {
+  return read().localMcpServers ?? [];
+}
+
+export function setLocalMcpServers(list: LocalMcpServerConfig[]): void {
+  const s = read();
+  write({ ...s, localMcpServers: list });
+}
+
+export function getLocalMcpAllowed(): Record<string, string[]> {
+  return read().localMcpAllowed ?? {};
+}
+
+export function setLocalMcpAllowed(map: Record<string, string[]>): void {
+  const s = read();
+  write({ ...s, localMcpAllowed: map });
 }

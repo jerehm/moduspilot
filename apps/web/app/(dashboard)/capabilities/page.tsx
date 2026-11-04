@@ -2,6 +2,7 @@
 
 import { useAuth } from '@/components/providers/AuthProvider';
 import ConnectorsSettings from '@/components/settings/ConnectorsSettings';
+import LocalMacSettings from '@/components/settings/LocalMacSettings';
 
 export default function ConnectionsPage() {
   const { user } = useAuth();
@@ -21,6 +22,7 @@ export default function ConnectionsPage() {
           <h1 className="text-xl font-semibold text-text">Capabilities</h1>
           <p className="text-sm text-muted mt-1.5">Everything Modus can do, add plugins, connect your tools, your Mac, and your device, and toggle AI features.</p>
         </div>
+        <LocalMacSettings />
         <ConnectorsSettings user={user} />
       </div>
     </div>

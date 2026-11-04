@@ -1,5 +1,6 @@
 import { BrowserWindow, app, shell } from 'electron';
 import log from 'electron-log';
+import path from 'path';
 
 // The desktop app is just the real MODUS web app in a native window. The user
 // signs in here once; the background sync agent pulls a fresh Firebase ID token
@@ -9,7 +10,10 @@ import log from 'electron-log';
 // Enter at /login, not / (which is the marketing homepage): /login shows the
 // sign-in form when signed out and auto-redirects to /dashboard when a
 // persisted session exists — so the desktop always lands in the actual app.
-const MODUS_URL = 'https://moduspilot.com/login';
+const MODUS_URL = !app.isPackaged && process.env.MODUS_DESKTOP_URL
+  // Dev only: point the shell at a local web server (http://localhost:3100/login).
+  ? process.env.MODUS_DESKTOP_URL
+  : 'https://moduspilot.com/login';
 
 // Branded dark splash shown instantly (and again while reconnecting). On an
 // auto-launch at login the network stack is often not up yet, so loadURL to the
@@ -70,11 +74,17 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     title: 'MODUS',
     // Match the app's dark background so a slow/failed load never flashes white.
     backgroundColor: '#0A0A0F',
-    // Loading our own remote web app — keep Electron's secure defaults
-    // (contextIsolation on, nodeIntegration off). The sync agent reads the
-    // token via webContents.executeJavaScript against the page's main world,
-    // so no preload or node exposure to remote content is needed.
-    webPreferences: {},
+    // Loading our own remote web app. The sync agent reads the token via
+    // webContents.executeJavaScript against the page's main world.
+    // The local bridge (window.modusDesktop) for folder access and local MCP
+    // servers. Sandboxed preload, context isolation on, Node off; main checks
+    // every call's origin (local/guard.ts). Screen capture is NOT on it.
+    webPreferences: {
+      preload: path.join(__dirname, '../preload/bridge.js'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+    },
   });
 
   const win = mainWindow;

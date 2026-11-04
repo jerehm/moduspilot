@@ -155,6 +155,9 @@ export function summarizeSteps(
     const results = new Map(step.toolResults.map(r => [r.toolCallId, r.result]));
     for (const call of step.toolCalls) {
       const has = results.has(call.toolCallId);
+      // A local__ tool runs on the user's Mac after this request ends; its
+      // result arrives with the next request, and the client saves its record.
+      if (!has && call.toolName.startsWith('local__')) continue;
       const result = results.get(call.toolCallId);
       out.push({
         id: call.toolCallId,
@@ -235,4 +238,35 @@ export function readToolAnnotations(m: unknown): { calls: ToolCallRecord[]; serv
     }
   }
   return { calls, servers, ui };
+}
+
+/**
+ * The annotations to persist for a message, with every live tool invocation
+ * folded into its modusTools record.
+ *
+ * The server writes modusTools per request, but a local__ tool (desktop) runs
+ * between requests, so no request ever sees its result. Folding the client's
+ * invocations in at save time keeps every call, local or not, after a reload.
+ * Saved copies stay bounded: no raw values, no inline base64.
+ */
+export function annotationsForSave(m: unknown): unknown[] | undefined {
+  const anns = (m as { annotations?: unknown[] })?.annotations;
+  const live = (m as { toolInvocations?: { toolCallId: string; toolName: string; args?: unknown; state: string; result?: unknown }[] })?.toolInvocations;
+  if (!Array.isArray(live) || live.length === 0) return anns;
+  const { calls: saved, servers, ui } = readToolAnnotations(m);
+  const byId = new Map(saved.map(r => [r.id, r]));
+  for (const inv of live) {
+    if (inv.state !== 'result') continue;
+    const rec = fromInvocation(inv, servers, ui);
+    const prev = byId.get(rec.id);
+    byId.set(rec.id, {
+      ...rec,
+      raw: undefined,
+      media: extractMedia(inv.result, { allowInline: false }),
+      ...(prev?.saved ? { saved: prev.saved } : {}),
+    });
+  }
+  const merged = [...byId.values()].map(({ raw: _raw, ...r }) => r);
+  const rest = (Array.isArray(anns) ? anns : []).filter(a => !(a && typeof a === 'object' && 'modusTools' in (a as object)));
+  return [...rest, { modusTools: merged }];
 }

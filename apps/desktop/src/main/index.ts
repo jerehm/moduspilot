@@ -9,6 +9,8 @@ import { initLaunchAtLogin } from './settings';
 import { getAuthState } from './sync/ingest';
 import { pollNotifications } from './notifications';
 import { initAutoUpdate } from './updater';
+import { registerLocalIpc } from './local/ipc';
+import { stopAll as stopLocalMcp } from './local/mcp';
 
 // Keychain access group for the Touch ID WebAuthn authenticator. MUST stay byte-
 // for-byte identical to the keychain-access-groups entry in
@@ -18,6 +20,12 @@ const WEBAUTHN_KEYCHAIN_GROUP = '8KF5J7X9BU.com.moduspilot.desktop.webauthn';
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;    // background sync cadence
 const AUTH_POLL_MS = 60 * 1000;            // how often we re-check sign-in state
 const NOTIFICATION_POLL_MS = 60 * 1000;    // how often we check for new notifications
+
+// Test runs get their own profile, settings file and single-instance lock, so
+// they can run beside the installed app without touching its data.
+if (!app.isPackaged && process.env.MODUS_TEST_USER_DATA) {
+  app.setPath('userData', process.env.MODUS_TEST_USER_DATA);
+}
 
 log.initialize();
 log.info('[main] starting MODUS Desktop');
@@ -33,7 +41,13 @@ if (!app.requestSingleInstanceLock()) {
   // throw simply never ran. That is not hypothetical — it is what 0.1.0 did, and
   // it is why a laptop that woke with no network sat on a white window for days.
   app.whenReady().then(async () => {
-    initLaunchAtLogin();
+    registerLocalIpc();
+    // Test runs (unpackaged + MODUS_TEST_NO_SYNC=1) sign the window into a TEST
+    // account. Sync would then upload this Mac's real Notes, Messages and
+    // Contacts into it, so none of the background agents start.
+    const testRun = !app.isPackaged && process.env.MODUS_TEST_NO_SYNC === '1';
+    if (testRun) log.warn('[main] test run: sync, login item, updater and notifications are OFF');
+    if (!testRun) initLaunchAtLogin();
 
     // Sign-in is Google/Apple OAuth in the login window, and their pages use
     // WebAuthn (navigator.credentials.get) for passkeys/fingerprint. Electron
@@ -65,7 +79,7 @@ if (!app.requestSingleInstanceLock()) {
     // was one of the casualties, it could never download the release that fixed
     // it. A broken window must never be able to disable the thing that repairs it.
     createTray();
-    initAutoUpdate();
+    if (!testRun) initAutoUpdate();
     registerScreenAssistHotkeys();
 
     // The window is now the only failure-tolerant step. Its own splash+retry keeps
@@ -81,6 +95,7 @@ if (!app.requestSingleInstanceLock()) {
     // Reflect sign-in state in the tray, and kick a sync the moment the user
     // transitions from signed-out to signed-in (instead of waiting for the next
     // scheduler tick). getAuthState reads the token from the signed-in window.
+    if (testRun) return;
     let wasSignedIn = false;
     const refreshAuth = async (): Promise<void> => {
       const { signedIn, email } = await getAuthState();
@@ -127,6 +142,8 @@ if (!app.requestSingleInstanceLock()) {
     // Tears down any in-flight assist request and stops watch mode. Nothing that
     // reads the screen may survive the app that owns it.
     destroyOverlay();
+    // Local MCP servers are child processes; none may outlive the app.
+    void stopLocalMcp();
   });
 
   // Tray app: closing the window hides it (handled in windows.ts), so this is a

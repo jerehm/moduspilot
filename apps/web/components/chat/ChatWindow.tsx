@@ -3,6 +3,7 @@
 import { useChat } from 'ai/react';
 import MessageBubble, { extractTextContent } from './MessageBubble';
 import { WorkspaceShell } from '@/components/workspace/WorkspacePanel';
+import { desktopBridge, isLocalTool, type LocalToolDef } from '@/lib/desktop-bridge';
 import ChatInput from './ChatInput';
 import CompareCard from './CompareCard';
 import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
@@ -389,6 +390,19 @@ export default function ChatWindow({
     return () => clearTimeout(t);
   }, [usagePct]);
 
+  // Tools on this Mac (desktop app only). Refreshed when the window regains
+  // focus, since a folder or local server may have been added in Capabilities.
+  const [localToolDefs, setLocalToolDefs] = useState<LocalToolDef[]>([]);
+  useEffect(() => {
+    const bridge = desktopBridge();
+    if (!bridge || isGuest) return;
+    let alive = true;
+    const load = () => bridge.toolDefs().then(r => { if (alive && r.ok) setLocalToolDefs(r.value); }).catch(() => {});
+    load();
+    window.addEventListener('focus', load);
+    return () => { alive = false; window.removeEventListener('focus', load); };
+  }, [isGuest]);
+
   const { messages, input, handleInputChange, append, isLoading, setInput, setMessages, stop, reload, data: streamData } = useChat({
     api: '/api/chat',
     // Unthrottled, every token is a synchronous store update under React 19, and
@@ -397,6 +411,17 @@ export default function ChatWindow({
     // seen on Safari after the Next 16 upgrade). Batching to one update per 50ms
     // is the SDK's own remedy and is invisible at reading speed.
     experimental_throttle: 50,
+    // Desktop app: local__ tools run on the user's Mac. The server leaves them
+    // unexecuted, this runs them through window.modusDesktop, and maxSteps lets
+    // useChat post the result back so the model can continue.
+    maxSteps: localToolDefs.length > 0 ? 5 : 1,
+    onToolCall: async ({ toolCall }) => {
+      if (!isLocalTool(toolCall.toolName)) return undefined;
+      const bridge = desktopBridge();
+      if (!bridge) return { isError: true, content: [{ type: 'text', text: 'Local tools only run in the MODUS desktop app.' }] };
+      const r = await bridge.callTool(toolCall.toolName, toolCall.args);
+      return r.ok ? r.value : { isError: true, content: [{ type: 'text', text: r.error }] };
+    },
     onResponse: (response) => {
       // Read once and clear, so it belongs to this response only.
       const fallbackNotice = fallbackNoticeRef.current;
@@ -447,6 +472,7 @@ export default function ChatWindow({
       briefingHour: briefingHour ?? 7,
       briefingTimezone: Intl.DateTimeFormat().resolvedOptions().timeZone || briefingTimezone || 'UTC',
       ...(workspaceId ? { workspaceId } : {}),
+      ...(localToolDefs.length > 0 ? { localTools: localToolDefs } : {}),
     },
     onFinish: (message) => {
       streamCompletedRef.current = true;

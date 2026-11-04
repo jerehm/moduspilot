@@ -1,4 +1,4 @@
-import { streamText, StreamData, convertToCoreMessages } from 'ai';
+import { streamText, StreamData, convertToCoreMessages, tool, jsonSchema } from 'ai';
 import { summarizeSteps } from '@/lib/chat/tool-activity';
 import { withToolHeartbeat } from '@/lib/chat/tool-heartbeat';
 import { isWorkspaceId } from '@/lib/workspace';
@@ -169,6 +169,8 @@ export async function POST(req: Request) {
       screenMode?: boolean;
       /** The chat's workspace (lib/workspace.ts). */
       workspaceId?: string;
+      /** Desktop app only: tools that run on the user's Mac (executed client side). */
+      localTools?: { name?: unknown; description?: unknown; inputSchema?: unknown; server?: unknown }[];
     };
 
     // req.json() rejects on a malformed body; bodyPromise swallows that into null.
@@ -634,6 +636,32 @@ export async function POST(req: Request) {
       }
     })() : Promise.resolve();
 
+    // Tools that run on the user's Mac (desktop app). They have no execute: the
+    // model's call ends the step, the desktop runs it through window.modusDesktop
+    // and useChat posts the result back. Only honoured from the desktop shell
+    // (its user agent), named local__*, capped, schemas sanitized like MCP's.
+    const fromDesktop = /MODUSDesktop\//.test(req.headers.get('user-agent') ?? '');
+    let localBlock = '';
+    if (uid && fromDesktop && Array.isArray(body.localTools) && body.localTools.length > 0 && !isContentless) {
+      const defs = body.localTools
+        .filter(d => typeof d?.name === 'string' && /^local__[\w-]{1,57}$/.test(d.name as string) && d.inputSchema && typeof d.inputSchema === 'object')
+        .slice(0, 64);
+      const localTools: Record<string, unknown> = {};
+      for (const d of defs) {
+        localTools[d.name as string] = tool({
+          description: String(d.description ?? '').slice(0, 1000),
+          parameters: jsonSchema({ ...(d.inputSchema as Record<string, unknown>), additionalProperties: false } as Parameters<typeof jsonSchema>[0]),
+        });
+        mcpServerByTool[d.name as string] = String(d.server ?? 'This Mac').slice(0, 40);
+      }
+      const { tools: safeLocal } = sanitizeMcpToolSchemas(localTools);
+      mcpTools = { ...mcpTools, ...safeLocal };
+      if (defs.length > 0) {
+        localBlock = '\n\nTOOLS ON THE USER\'S MAC (local__*): ' + [...new Set(defs.map(d => String(d.server ?? 'This Mac')))].join(', ') +
+          '. They run on the user\'s own computer and may ask the user for permission first. local__*_file tools work in the one folder the user chose.';
+      }
+    }
+
     // The chat's workspace (lib/workspace.ts). Same gates as MCP minus the
     // personal-data one: "save this email as a note" is a personal-data query
     // that still wants a file. Runs beside MCP discovery, never after it.
@@ -1091,7 +1119,7 @@ export async function POST(req: Request) {
     const activeMcpTools = toolsUsable
       ? withToolHeartbeat(mcpTools, () => { if (!streamDataClosed) streamData.append({ modusHeartbeat: Date.now() }); })
       : {};
-    const activeMcpBlock = toolsUsable ? mcpBlock + workspaceBlock : '';
+    const activeMcpBlock = toolsUsable ? mcpBlock + workspaceBlock + localBlock : '';
     if (!toolsUsable && Object.keys(mcpTools).length > 0) {
       console.log(`[chat] tools dropped: ${resolved.modelId} cannot take function tools — answering without them`);
     }

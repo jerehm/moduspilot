@@ -8,6 +8,7 @@ import { McpAppFrame, type WidgetTarget } from './WidgetPanel';
 import { wsApi, fmtAge, fmtSize, type FileMeta, type VersionDoc } from '@/lib/workspace-client';
 import { diffLines } from '@/lib/workspace-diff';
 import { humanTool } from '@/lib/chat/tool-activity';
+import { desktopBridge, type LocalEntry } from '@/lib/desktop-bridge';
 
 /**
  * The panel beside a chat: Files (the workspace tree), Preview (one file:
@@ -296,6 +297,86 @@ function FilePreview({ ws, path, refreshKey, onChanged, onGone }: { ws: string; 
   );
 }
 
+// ── This Mac (desktop app) ───────────────────────────────────────────────────
+
+/**
+ * The folder the user chose on their Mac, read-only. The model changes files
+ * there through the local__ tools; this is for seeing what it did.
+ */
+function MacTab({ refreshKey }: { refreshKey: number }) {
+  const [bridge] = useState(() => desktopBridge());
+  const [entries, setEntries] = useState<LocalEntry[] | null>(null);
+  const [folder, setFolder] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [preview, setPreview] = useState<{ mime: string; text?: string; dataUrl?: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!bridge) return;
+    let alive = true;
+    Promise.all([bridge.folder.current(), bridge.folder.list('')]).then(([f, l]) => {
+      if (!alive) return;
+      setFolder(f.ok ? f.value : null);
+      if (l.ok) { setEntries(l.value); setError(null); } else setError(l.error);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [bridge, refreshKey]);
+
+  useEffect(() => {
+    if (!bridge || !selected) return;
+    let alive = true;
+    bridge.folder.preview(selected).then(r => {
+      if (!alive) return;
+      if (r.ok) { setPreview(r.value); setError(null); } else setError(r.error);
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [bridge, selected, refreshKey]);
+
+  if (!bridge) return null;
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      <p className="px-4 py-2 border-b border-border text-xs text-muted truncate">{folder ?? 'No folder chosen. Choose one in Capabilities, On this Mac.'}</p>
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {error && <p className="text-xs text-red-500 px-4 py-2">{error}</p>}
+        {selected && preview ? (
+          <div className="p-4 space-y-2">
+            <button onClick={() => { setSelected(null); setPreview(null); }} className="text-xs text-muted hover:text-text">‹ All files</button>
+            <p className="text-xs text-text font-mono">{selected}</p>
+            {preview.dataUrl && preview.mime.startsWith('image/') ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={preview.dataUrl} alt={selected} className="max-w-full rounded-lg border border-border" />
+            ) : preview.dataUrl ? (
+              <iframe title={selected} src={preview.dataUrl} className="w-full h-[70vh] rounded-lg border border-border" />
+            ) : preview.mime === 'text/markdown' ? (
+              <MarkdownMessage>{preview.text ?? ''}</MarkdownMessage>
+            ) : (
+              <pre className="rounded-lg border border-border bg-panel p-3 text-[12.5px] font-mono whitespace-pre-wrap break-words text-text">{preview.text}</pre>
+            )}
+          </div>
+        ) : (
+          <div className="py-1.5 px-1.5">
+            {entries?.length === 0 && <p className="text-xs text-muted px-3 py-6 text-center">This folder is empty.</p>}
+            {entries?.map(e => (
+              <button
+                key={e.path}
+                type="button"
+                disabled={e.kind === 'folder'}
+                onClick={() => setSelected(e.path)}
+                className="w-full flex items-center gap-1.5 py-1 pr-2 rounded-md text-left text-[13px] text-text/85 hover:bg-text/[0.05] disabled:hover:bg-transparent"
+                style={{ paddingLeft: 8 + (e.path.split('/').length - 1) * 14 }}
+              >
+                <FileIcon f={e.kind === 'folder' ? undefined : ({ mime: /\.(png|jpe?g|gif|webp)$/i.test(e.path) ? 'image/png' : 'text/plain' } as FileMeta)} />
+                <span className="truncate flex-1">{e.path.split('/').pop()}</span>
+                {e.kind !== 'folder' && <span className="text-[11px] text-muted tabular-nums">{fmtSize(e.size)}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Standalone browser (project page) ────────────────────────────────────────
 
 /**
@@ -355,6 +436,7 @@ export function WorkspaceShell({ workspaceId, onWidgetMessage, children }: {
   const [refreshKey, setRefreshKey] = useState(0);
 
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
+  const [hasMac] = useState(() => !!desktopBridge());
   useEffect(() => {
     if (!workspaceId || !open) return;
     let alive = true;
@@ -379,6 +461,7 @@ export function WorkspaceShell({ workspaceId, onWidgetMessage, children }: {
     ...(workspaceId ? [{ id: 'files' as const, label: 'Files' }] : []),
     ...(previewPath && workspaceId ? [{ id: 'preview' as const, label: previewPath.split('/').pop() ?? 'Preview' }] : []),
     ...(widget ? [{ id: 'widget' as const, label: `${widget.server ?? 'Plugin'} widget` }] : []),
+    ...(hasMac ? [{ id: 'mac' as const, label: 'This Mac' }] : []),
   ];
 
   return (
@@ -413,6 +496,7 @@ export function WorkspaceShell({ workspaceId, onWidgetMessage, children }: {
               {tab === 'preview' && workspaceId && previewPath && (
                 <FilePreview key={previewPath} ws={workspaceId} path={previewPath} refreshKey={refreshKey} onChanged={refresh} onGone={() => { setPreviewPath(null); setTab('files'); }} />
               )}
+              {tab === 'mac' && hasMac && <MacTab refreshKey={refreshKey} />}
               {tab === 'widget' && widget && (
                 <div className="h-full overflow-y-auto p-4">
                   <p className="text-xs text-muted mb-2">Widget from <span className="text-text">{widget.server ?? 'plugin'}</span> · {humanTool(widget.tool)}</p>

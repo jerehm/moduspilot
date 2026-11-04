@@ -1,5 +1,6 @@
 'use client';
 
+import { annotationsForSave } from '@/lib/chat/tool-activity';
 import { useEffect, useState, useCallback } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
@@ -104,8 +105,9 @@ export function useConversations(uid: string | null) {
       // Keep `annotations` when present (used to persist which model Auto routed
       // a message to, so the "routed this to <model>" chip survives a reload).
       messages: messages.map(m => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const annotations = (m as any).annotations;
+        // Live tool invocations (incl. desktop local__ tools, which no request
+        // ever records) folded into the saved modusTools annotation.
+        const annotations = annotationsForSave(m);
         return annotations
           ? { id: m.id, role: m.role, content: m.content, annotations }
           : { id: m.id, role: m.role, content: m.content };

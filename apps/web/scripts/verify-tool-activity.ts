@@ -3,7 +3,7 @@
  *
  *   cd apps/web && npx tsx scripts/verify-tool-activity.ts
  */
-import { extractMedia, summarizeSteps, fromInvocation, summaryLine, humanTool, readToolAnnotations } from '../lib/chat/tool-activity';
+import { extractMedia, summarizeSteps, fromInvocation, summaryLine, humanTool, readToolAnnotations, annotationsForSave } from '../lib/chat/tool-activity';
 
 let failures = 0;
 function check(label: string, cond: boolean, detail?: unknown) {
@@ -60,6 +60,23 @@ check('humanTool strips prefix', humanTool('pika__generate_image') === 'Generate
 
 const ann = readToolAnnotations({ annotations: [{ modusToolServers: { a: 'Pika' } }, { modusTools: recs }] });
 check('annotations read back', ann.calls.length === 3 && ann.servers.a === 'Pika');
+
+// Local (desktop) calls: skipped by the server summary, kept by the save-time merge.
+const localSteps = summarizeSteps([{ toolCalls: [{ toolCallId: 'L1', toolName: 'local__write_file', args: { path: 'a.md' } }], toolResults: [] }], {});
+check('server summary skips unresolved local call', localSteps.length === 0, localSteps);
+const msg = {
+  annotations: [{ modusServedModel: 'x' }, { modusToolServers: { local__write_file: 'This Mac' } }, { modusTools: [{ id: 'S1', tool: 'generate_image', server: 'Pika', state: 'done', media: [], saved: ['outputs/pika/a.png'] }] }],
+  toolInvocations: [
+    { toolCallId: 'S1', toolName: 'generate_image', state: 'result', args: {}, result: { content: [{ type: 'image', data: 'AAAA', mimeType: 'image/png' }] } },
+    { toolCallId: 'L1', toolName: 'local__write_file', state: 'result', args: { path: 'a.md' }, result: { content: [{ type: 'text', text: '{"path":"a.md"}' }] } },
+  ],
+};
+const savedAnns = annotationsForSave(msg) as Record<string, unknown>[];
+const tools = (savedAnns.find(a => 'modusTools' in a) as { modusTools: { id: string; server?: string; saved?: string[] }[] }).modusTools;
+check('local call saved with its label', tools.some(t => t.id === 'L1' && t.server === 'This Mac'), tools);
+check('server saved paths kept', tools.find(t => t.id === 'S1')?.saved?.[0] === 'outputs/pika/a.png');
+check('no base64 or raw in saved copy', !JSON.stringify(savedAnns).includes('AAAA') && !JSON.stringify(savedAnns).includes('"raw"'));
+check('other annotations kept, one modusTools', savedAnns.filter(a => 'modusTools' in a).length === 1 && savedAnns.some(a => 'modusServedModel' in a));
 
 console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} failed.`);
 process.exit(failures === 0 ? 0 : 1);

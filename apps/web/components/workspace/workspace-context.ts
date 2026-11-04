@@ -7,7 +7,7 @@ import type { WidgetTarget } from './WidgetPanel';
  * The workspace panel's context, in its own module so MarkdownMessage (which
  * the panel itself renders) can open files without an import cycle.
  */
-export type Tab = 'files' | 'preview' | 'widget';
+export type Tab = 'files' | 'preview' | 'widget' | 'mac';
 
 export interface WorkspaceCtx {
   workspaceId?: string;
