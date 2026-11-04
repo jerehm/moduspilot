@@ -78,6 +78,17 @@ function build() {
       { type: 'image', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', mimeType: 'image/png' },
     ],
   }));
+  // Phase 6: a prompt (slash command) with an argument, and a text resource.
+  s.registerPrompt('brainstorm', {
+    title: 'Brainstorm',
+    description: 'Ten ideas about a topic.',
+    argsSchema: { topic: z.string().describe('What to brainstorm') },
+  }, ({ topic }) => ({
+    messages: [{ role: 'user', content: { type: 'text', text: `Give me ten fresh ideas about ${topic}. One line each.` } }],
+  }));
+  s.registerResource('style-guide', 'docs://modus-test/style-guide', { title: 'Poster style guide', mimeType: 'text/markdown' }, async () => ({
+    contents: [{ uri: 'docs://modus-test/style-guide', mimeType: 'text/markdown', text: '# Poster style guide\n\nThe house color is violet #7c3aed. Codeword: PELICAN-42.' }],
+  }));
   s.registerResource('poster', URI, { mimeType: MIME }, async () => ({
     contents: [{ uri: URI, mimeType: MIME, text: WIDGET, _meta: { ui: { prefersBorder: true } } }],
   }));

@@ -2,6 +2,7 @@
 
 import { useWorkspacePanel } from '@/components/workspace/workspace-context';
 import { wsApi } from '@/lib/workspace-client';
+import { SlashMenu, ResourcePicker, useCatalog, slashQuery, matchPrompts } from './PluginCatalog';
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -75,12 +76,19 @@ export default function ChatInput({
   docked = true,
 }: Props) {
   const workspacePanel = useWorkspacePanel();
+  // Plugin prompts on "/" and plugin resources in the + menu (phase 6).
+  const slash = slashQuery(input);
+  const [resourcesOpen, setResourcesOpen] = useState(false);
+  const [slashClosedFor, setSlashClosedFor] = useState<string | null>(null);
+  const [slashPick, setSlashPick] = useState(0);
   const [recording, setRecording] = useState(false);
   // Between stopping the recording and the transcript arriving the mic looked
   // idle for seconds, which reads as broken (11-03 audit round 3).
   const [transcribing, setTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const catalog = useCatalog(slash !== null || menuOpen);
+  const slashMenuShown = slash !== null && slashClosedFor !== input && !!catalog && matchPrompts(catalog.prompts, slash).length > 0;
   const [extracting, setExtracting] = useState<string | null>(null);
   const [attachError, setAttachError] = useState('');
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -114,6 +122,9 @@ export default function ChatInput({
   }, [input, textareaRef]);
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (slashMenuShown && e.key === 'Escape') { e.preventDefault(); setSlashClosedFor(input); return; }
+    // Enter on "/name" uses the top prompt instead of sending "/name" to the model.
+    if (slashMenuShown && e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setSlashPick(n => n + 1); return; }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       e.currentTarget.closest('form')?.requestSubmit();
@@ -384,7 +395,8 @@ export default function ChatInput({
           )}
         </AnimatePresence>
 
-        <div className="flex gap-3 items-end bg-panel border border-border rounded-2xl px-4 py-3">
+        {/* relative: anchors the slash menu and resource picker above the box. */}
+        <div className="relative flex gap-3 items-end bg-panel border border-border rounded-2xl px-4 py-3">
           {/* "+" menu */}
           <div className="relative shrink-0" ref={menuRef}>
             <Tooltip label="Attach & tools" side="top">
@@ -419,6 +431,9 @@ export default function ChatInput({
               >
                 <MenuItem onClick={() => { setMenuOpen(false); imageRef.current?.click(); }} icon={<PhotoIcon />} label="Attach photo" hint="PNG, JPG" />
                 <MenuItem onClick={() => { setMenuOpen(false); docRef.current?.click(); }} icon={<FileIcon />} label="Attach file" hint="PDF, Word, text" />
+                {onFileAttach && !!catalog?.resources.length && (
+                  <MenuItem onClick={() => { setMenuOpen(false); setResourcesOpen(true); }} icon={<PlugIcon />} label="Add from a plugin" hint={`${catalog.resources.length} available`} />
+                )}
                 <div className="my-1 border-t border-border/60" />
                 {/* Not a toggle like Web search, because it isn't a mode: the
                     model emits an ```image block straight off the prompt, so a
@@ -468,6 +483,19 @@ export default function ChatInput({
             )}
             </AnimatePresence>
           </div>
+
+          {slashMenuShown && catalog && (
+            <SlashMenu
+              prompts={catalog.prompts}
+              query={slash ?? ''}
+              pickSignal={slashPick}
+              onUse={(text) => { setSlashClosedFor(null); onSeedPrompt?.(text); }}
+              onClose={() => setSlashClosedFor(input)}
+            />
+          )}
+          {resourcesOpen && catalog && onFileAttach && (
+            <ResourcePicker resources={catalog.resources} onAttach={onFileAttach} onClose={() => setResourcesOpen(false)} />
+          )}
 
           <textarea
             ref={textareaRef}
