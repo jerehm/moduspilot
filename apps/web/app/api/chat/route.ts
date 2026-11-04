@@ -1,4 +1,4 @@
-import { streamText, experimental_createMCPClient, StreamData, convertToCoreMessages } from 'ai';
+import { streamText, StreamData, convertToCoreMessages } from 'ai';
 import { summarizeSteps } from '@/lib/chat/tool-activity';
 import { withToolHeartbeat } from '@/lib/chat/tool-heartbeat';
 import type { CoreMessage } from 'ai';
@@ -10,7 +10,7 @@ import { messageTextLength, trimMessageText, stripLoneSurrogates } from '@/lib/c
 import { needsExplicitTemperature, maxTokensFor } from '@/lib/chat/model-params';
 import { effortProviderOptions, effortFor } from '@/lib/chat/effort';
 import { getMcpServers } from '@/lib/mcp-servers';
-import { connectMcpClient } from '@/lib/mcp-client';
+import { connectMcpHost, type McpHost } from '@/lib/mcp/host';
 import { FirestoreMcpOAuthProvider } from '@/lib/mcp/oauth';
 import { sanitizeMcpToolSchemas, makeToolErrorsNonFatal } from '@/lib/mcp-schema';
 import { assertPublicUrl } from '@/lib/ssrf';
@@ -24,7 +24,7 @@ import {
 import { FREE_MAX_MESSAGE_CHARS, FREE_HISTORY_CHAR_BUDGET } from '@/lib/constants';
 import { resolveChatModel, chatFallbackChain, createFallbackModel, silentStreamBackup, isPremiumModel, modelSupportsTools } from '@/lib/chat/model';
 import { routeTask } from '@/lib/chat/auto-route';
-import { canUseModel } from '@/lib/models';
+import { canUseModel, FREE_DEFAULT } from '@/lib/models';
 import {
   needsEmailCtx,
   needsCalendarCtx,
@@ -481,11 +481,13 @@ export async function POST(req: Request) {
     // the path — up to 8s — and now it overlaps the whole context block instead of
     // following it. Awaited before streamText, which is what mcpClients needs:
     // onFinish/onError close them.
-    type McpClient = Awaited<ReturnType<typeof experimental_createMCPClient>>;
+    type McpClient = McpHost;
     const mcpClients: McpClient[] = [];
     let mcpTools: Record<string, unknown> = {};
     // toolName → connector name, so the chat can say "used Pika" not "ran a tool".
     const mcpServerByTool: Record<string, string> = {};
+    // toolName → widget (MCP Apps). The chat opens it in the side panel.
+    const mcpUiByTool: Record<string, { serverId: string; uri: string }> = {};
     let mcpBlock = '';
     // "yoyo" must never reach a documentation tool. MCP tools were attached to
     // EVERY message regardless of what it said or which model answered it, so a
@@ -543,7 +545,7 @@ export async function POST(req: Request) {
             // Re-check at connection time: a stored URL could resolve to an
             // internal address now (DNS rebinding) even if it was public when added.
             await assertPublicUrl(server.url);
-            const connectP = connectMcpClient({
+            const connectP = connectMcpHost({
               url: server.url,
               authHeader: server.authHeader,
               transport: server.transport,
@@ -613,6 +615,7 @@ export async function POST(req: Request) {
           );
           mcpTools = { ...mcpTools, ...safeTools };
           for (const t of Object.keys(safeTools)) mcpServerByTool[t] = server.name;
+          for (const [t, ui] of Object.entries(client.uiByTool)) mcpUiByTool[t] = { serverId: server.id, uri: ui.uri };
           toolNamesByServer.push(`${server.name}: ${Object.keys(tools).join(', ')}`);
           mcpClients.push(client);
         }
@@ -783,6 +786,18 @@ export async function POST(req: Request) {
 
     // Resolve model — an in-chat/Auto override wins for this message, else BYOK
     // keys, then the platform default (Groq). hasImage forces a vision model.
+    // Auto must not hand a tool request to a model that cannot call tools.
+    // Seen 11-03: Auto routed "call make_poster" to Llama 3.3, the tools were
+    // dropped, and Llama printed a fake command and said the poster was made.
+    // When connector tools are live for this message, an Auto pick without tool
+    // support is swapped for the tool-capable default. A manual pick stands.
+    if (wasAutoRouted && forcedModelId && !modelSupportsTools(forcedModelId)) {
+      await mcpSetupPromise;
+      if (Object.keys(mcpTools).length > 0 && canUseModel(FREE_DEFAULT, userData.plan) && modelSupportsTools(FREE_DEFAULT)) {
+        console.log(`[route] tools live: ${forcedModelId} cannot call tools, using ${FREE_DEFAULT}`);
+        forcedModelId = FREE_DEFAULT;
+      }
+    }
     const resolved = resolveChatModel(userData, { hasImage, modelId: forcedModelId });
     // Fold a locked pick into the SAME downgrade signal the runtime failover
     // uses, so it reaches the user through the machinery that already exists
@@ -979,7 +994,7 @@ export async function POST(req: Request) {
     // Which connector each tool belongs to. Sent up front so the live tool row
     // can name the connector while the call is still running.
     if (Object.keys(mcpServerByTool).length > 0 && modelSupportsTools(resolved.modelId)) {
-      streamData.appendMessageAnnotation({ modusToolServers: mcpServerByTool });
+      streamData.appendMessageAnnotation({ modusToolServers: mcpServerByTool, modusToolUi: mcpUiByTool });
     }
 
     let servedModelId = resolved.modelId;
@@ -1131,7 +1146,25 @@ export async function POST(req: Request) {
         }
         // Save what the tools did. useConversations persists content and
         // annotations only, so without this every tool call vanishes on reload.
-        const toolRecords = summarizeSteps(steps ?? [], mcpServerByTool);
+        const toolRecords = summarizeSteps(steps ?? [], mcpServerByTool, mcpUiByTool);
+        // A widget renders from the FULL result (structuredContent), which the
+        // saved record clips. Keep it per call, off the conversation doc, so a
+        // reopened chat can still feed its widget.
+        if (uid && Object.keys(mcpUiByTool).length > 0) {
+          for (const step of steps ?? []) {
+            const results = step.toolResults as unknown as { toolCallId: string; toolName: string; result: unknown }[];
+            const calls = step.toolCalls as unknown as { toolCallId: string; args: unknown }[];
+            for (const r of results) {
+              if (!mcpUiByTool[r.toolName]) continue;
+              const call = calls.find(c => c.toolCallId === r.toolCallId);
+              const result = JSON.stringify(r.result ?? null);
+              if (result.length > 400_000) continue;
+              adminDb.collection('users').doc(uid).collection('toolResults').doc(r.toolCallId)
+                .set({ result, args: JSON.stringify(call?.args ?? null), tool: r.toolName, at: Date.now() })
+                .catch(e => console.error('[chat] toolResults save failed:', String(e)));
+            }
+          }
+        }
         if (toolRecords.length > 0) {
           streamData.appendMessageAnnotation({ modusTools: toolRecords } as unknown as Parameters<typeof streamData.appendMessageAnnotation>[0]);
         }

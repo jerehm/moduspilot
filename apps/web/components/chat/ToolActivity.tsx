@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Message } from 'ai';
 import {
   fromInvocation,
@@ -10,18 +10,19 @@ import {
   type ToolCallRecord,
   type ToolMedia,
 } from '@/lib/chat/tool-activity';
+import { useWidgetPanel } from '@/components/workspace/WidgetPanel';
 
 /**
  * The record of tool calls on one assistant turn. Live invocations win while
  * the turn streams; after a reload the saved annotation is all there is.
  */
 export function toolCallsFor(message: Message): ToolCallRecord[] {
-  const { calls: saved, servers } = readToolAnnotations(message);
+  const { calls: saved, servers, ui } = readToolAnnotations(message);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const live = (message as any).toolInvocations as
     | { toolCallId: string; toolName: string; args?: unknown; state: string; result?: unknown }[]
     | undefined;
-  if (Array.isArray(live) && live.length > 0) return live.map(inv => fromInvocation(inv, servers));
+  if (Array.isArray(live) && live.length > 0) return live.map(inv => fromInvocation(inv, servers, ui));
   return saved;
 }
 
@@ -88,6 +89,36 @@ function CallRow({ call }: { call: ToolCallRecord }) {
   );
 }
 
+// Calls whose widget already opened itself this session. Module level so a
+// remount (scrolling, a re-render of the thread) never reopens a closed panel.
+const autoOpened = new Set<string>();
+
+function WidgetRow({ call }: { call: ToolCallRecord }) {
+  const panel = useWidgetPanel();
+  const live = call.state === 'done' && call.raw?.result !== undefined;
+  // A widget that just finished opens beside the chat on its own, the way a
+  // desktop host does. Only for live calls (a reload never pops panels open)
+  // and only where there is room for a side panel.
+  useEffect(() => {
+    if (!panel || !call.ui || !live || autoOpened.has(call.id)) return;
+    if (!window.matchMedia('(min-width: 768px)').matches) return;
+    autoOpened.add(call.id);
+    panel.open({ ui: call.ui, server: call.server, tool: call.tool, toolCallId: call.id, args: call.raw?.args, result: call.raw?.result });
+  }, [panel, call, live]);
+  if (!panel || !call.ui || call.state !== 'done') return null;
+  return (
+    <button
+      type="button"
+      onClick={() => panel.open({ ui: call.ui!, server: call.server, tool: call.tool, toolCallId: call.id, args: call.raw?.args, result: call.raw?.result })}
+      className="flex items-center gap-2 text-xs text-muted hover:text-text transition-colors"
+    >
+      <span>Widget from <span className="text-text/80">{call.server ?? 'plugin'}</span></span>
+      <span className="text-text/80">{humanTool(call.tool)}</span>
+      <span aria-hidden>›</span>
+    </button>
+  );
+}
+
 export default function ToolActivity({ calls }: { calls: ToolCallRecord[] }) {
   const [open, setOpen] = useState(false);
   if (calls.length === 0) return null;
@@ -110,6 +141,7 @@ export default function ToolActivity({ calls }: { calls: ToolCallRecord[] }) {
           {calls.map(c => <CallRow key={c.id} call={c} />)}
         </div>
       )}
+      {calls.map(c => <WidgetRow key={`w-${c.id}`} call={c} />)}
       <MediaGrid media={media} />
     </div>
   );

@@ -2,9 +2,10 @@
 
 import { useChat } from 'ai/react';
 import MessageBubble, { extractTextContent } from './MessageBubble';
+import { WidgetPanelProvider, WidgetSidePanel, type WidgetTarget } from '@/components/workspace/WidgetPanel';
 import ChatInput from './ChatInput';
 import CompareCard from './CompareCard';
-import { useRef, useEffect, useState, useMemo } from 'react';
+import { useRef, useEffect, useState, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import type { Message } from 'ai';
 import { auth } from '@/lib/firebase';
@@ -822,6 +823,22 @@ export default function ChatWindow({
   // which we showed as "your session expired": a signed-in person told to log in.
   // getIdToken() returns the cached token (refreshing only if actually expired),
   // so this is cheap and, unlike the state var, never stale or missing at send.
+  // MCP Apps side panel. A widget's ui/message is the user asking for
+  // something from inside the widget, so it goes out as a normal user turn.
+  const [widget, setWidget] = useState<WidgetTarget | null>(null);
+  const widgetPanelCtx = useMemo(() => ({ open: (t: WidgetTarget) => setWidget(t) }), []);
+  const closeWidget = useCallback(() => setWidget(null), []);
+  const sendFromWidgetRef = useRef<(text: string) => void>(() => {});
+  const sendFromWidget = useCallback((text: string) => sendFromWidgetRef.current(text), []);
+  sendFromWidgetRef.current = (text: string) => {
+    void (async () => {
+      setChatError(null);
+      onUserMessage?.();
+      const headers = await authedHeaders();
+      append({ role: 'user', content: text }, { headers, body: { modelChoice: modelChoiceRef.current, lastRoutedModel: lastAutoRoutedModel() } });
+    })();
+  };
+
   async function authedHeaders(): Promise<Record<string, string> | undefined> {
     const token = auth.currentUser
       ? await auth.currentUser.getIdToken().catch(() => null)
@@ -932,7 +949,9 @@ export default function ChatWindow({
   const isEmpty = messages.length === 0 && !compare;
 
   return (
-    <div className={`flex flex-col h-full min-h-0 ${isEmpty ? 'justify-center' : ''}`}>
+    <WidgetPanelProvider value={widgetPanelCtx}>
+    <div className="flex h-full min-h-0">
+    <div className={`flex flex-col h-full min-h-0 flex-1 min-w-0 ${isEmpty ? 'justify-center' : ''}`}>
       <div
         ref={scrollContainerRef}
         className={isEmpty ? 'shrink-0 overflow-y-auto' : 'flex-1 min-h-0 overflow-y-auto'}
@@ -1261,5 +1280,8 @@ export default function ChatWindow({
         </motion.div>
       )}
     </div>
+    {widget && <WidgetSidePanel target={widget} onClose={closeWidget} onMessage={sendFromWidget} />}
+    </div>
+    </WidgetPanelProvider>
   );
 }

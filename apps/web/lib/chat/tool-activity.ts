@@ -31,7 +31,13 @@ export interface ToolCallRecord {
   args?: string;
   result?: string;
   media: ToolMedia[];
+  /** MCP Apps widget for this call, opened in the side panel. */
+  ui?: ToolUiRef;
+  /** Client only, never saved: the live args and full result for the widget. */
+  raw?: { args?: unknown; result?: unknown };
 }
+
+export interface ToolUiRef { serverId: string; uri: string }
 
 const ARGS_CAP = 600;
 const RESULT_CAP = 1200;
@@ -140,6 +146,7 @@ export function summarizeSteps(
     toolResults: ReadonlyArray<{ toolCallId: string; result: unknown }>;
   }>,
   serverByTool: Record<string, string>,
+  uiByTool: Record<string, ToolUiRef> = {},
 ): ToolCallRecord[] {
   const out: ToolCallRecord[] = [];
   for (const step of steps) {
@@ -155,6 +162,7 @@ export function summarizeSteps(
         args: clip(stringify(call.args), ARGS_CAP),
         result: has ? resultPreview(result) : 'No result came back.',
         media: has ? extractMedia(result, { allowInline: false }) : [],
+        ...(uiByTool[call.toolName] ? { ui: uiByTool[call.toolName] } : {}),
       });
     }
   }
@@ -165,9 +173,11 @@ export function summarizeSteps(
 export function fromInvocation(
   inv: { toolCallId: string; toolName: string; args?: unknown; state: string; result?: unknown },
   serverByTool: Record<string, string>,
+  uiByTool: Record<string, ToolUiRef> = {},
 ): ToolCallRecord {
   const done = inv.state === 'result';
   return {
+    ...(uiByTool[inv.toolName] ? { ui: uiByTool[inv.toolName] } : {}),
     id: inv.toolCallId,
     tool: inv.toolName,
     server: serverByTool[inv.toolName],
@@ -175,6 +185,7 @@ export function fromInvocation(
     args: clip(stringify(inv.args), ARGS_CAP),
     result: done ? resultPreview(inv.result) : undefined,
     media: done ? extractMedia(inv.result, { allowInline: true }) : [],
+    raw: { args: inv.args, result: done ? inv.result : undefined },
   };
 }
 
@@ -207,17 +218,19 @@ export function humanTool(name: string): string {
 }
 
 /** Reads the saved `modusTools` / `modusToolServers` annotations off a message. */
-export function readToolAnnotations(m: unknown): { calls: ToolCallRecord[]; servers: Record<string, string> } {
+export function readToolAnnotations(m: unknown): { calls: ToolCallRecord[]; servers: Record<string, string>; ui: Record<string, ToolUiRef> } {
   const anns = (m as { annotations?: unknown[] })?.annotations;
   let calls: ToolCallRecord[] = [];
   let servers: Record<string, string> = {};
+  let ui: Record<string, ToolUiRef> = {};
   if (Array.isArray(anns)) {
     for (const a of anns) {
       if (!a || typeof a !== 'object') continue;
       const o = a as Record<string, unknown>;
       if (Array.isArray(o.modusTools)) calls = o.modusTools as ToolCallRecord[];
       if (o.modusToolServers && typeof o.modusToolServers === 'object') servers = o.modusToolServers as Record<string, string>;
+      if (o.modusToolUi && typeof o.modusToolUi === 'object') ui = o.modusToolUi as Record<string, ToolUiRef>;
     }
   }
-  return { calls, servers };
+  return { calls, servers, ui };
 }

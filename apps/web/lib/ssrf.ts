@@ -81,6 +81,11 @@ export async function assertPublicUrl(rawUrl: string): Promise<void> {
   }
 
   const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  // Dev only: lets a local test MCP server (scripts/dev-mcp-app-server.mts) be
+  // connected. Requires BOTH a non-production build and an explicit opt-in.
+  if (process.env.NODE_ENV !== 'production' && process.env.MCP_ALLOW_LOCALHOST === '1' && (host === 'localhost' || host === '127.0.0.1')) {
+    return;
+  }
   if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) {
     throw new Error('URL points to a disallowed host');
   }
