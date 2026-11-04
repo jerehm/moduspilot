@@ -28,7 +28,16 @@ for (const line of readFileSync(resolve(process.cwd(), '.env.local'), 'utf8').sp
   if (!(m[1] in process.env)) process.env[m[1]] = v;
 }
 
-const UID = process.env.MODUS_UID || 'hSBcOHKSX9eCHaKSDczccTRzv093';
+// Runs on the TEST account with facts it seeds itself, then deletes them. It
+// used to read a real user's memory (and expect facts that user had since
+// cleared), so it failed whenever their data changed and said nothing about
+// whether recall worked.
+const UID = 'G0wpiD6SspS8cODvJfmLESqS7L33';
+const SEEDS = [
+  'Recalltest Person is raising a pre-seed round for their startup.',
+  'Recalltest Person is the CEO of a company called Zephyrine.',
+  'Recalltest Person lives in Lisbon, Portugal.',
+];
 
 let failures = 0;
 function check(label: string, cond: boolean, detail?: unknown) {
@@ -38,32 +47,47 @@ function check(label: string, cond: boolean, detail?: unknown) {
 
 async function main() {
   const { queryMemoryContext } = await import('../lib/chat/context');
+  const { upsertMemory, deleteMemories } = await import('../lib/pinecone');
+  const { isJunkFact } = await import('../lib/chat/memory');
 
-  // Pay the cold-start cost once, out of band, and report it — the assertions
-  // below are about the threshold and the plumbing, not about how long a fresh
-  // Pinecone client takes to construct. The COLD number is what the cap in
-  // context.ts is sized for, so it is worth printing on every run.
-  const coldStart = Date.now();
-  await queryMemoryContext(UID, 'warm up the client');
-  console.log(`cold first call: ${Date.now() - coldStart}ms  (the cap is 4000ms)`);
+  check('junk filter drops a meta fact', isJunkFact('Jeremiah is interacting with the assistant.'));
+  check('junk filter keeps a real fact', !isJunkFact(SEEDS[0]));
 
-  const cases: { q: string; expect: RegExp | null }[] = [
-    { q: 'am I raising money', expect: /fundrais|pre-seed/i },
-    { q: 'tell me about MODUS', expect: /MODUS/i },
-    { q: 'where do I live', expect: /Sydney/i },
-  ];
+  const ids: string[] = [];
+  try {
+    for (const t of SEEDS) { const id = await upsertMemory(UID, t, { type: 'verify_seed', ts: Date.now().toString() }); if (id) ids.push(id); }
+    // Serverless Pinecone is eventually consistent; give the writes a moment.
+    await new Promise(r => setTimeout(r, 8000));
 
-  for (const { q, expect } of cases) {
-    const started = Date.now();
-    const block = await queryMemoryContext(UID, q);
-    const ms = Date.now() - started;
-    console.log(`\n── ${JSON.stringify(q)}  (${ms}ms)`);
-    console.log(block ? block.trim().split('\n').map(l => `   ${l}`).join('\n') : '   (nothing injected)');
-    check(`recalls something for ${JSON.stringify(q)}`, block.length > 0);
-    if (expect) check(`  …and it is the RIGHT fact (${expect})`, expect.test(block), block);
-    // The cap must not be the thing that decides. 4000ms is the ceiling; a warm
-    // query lands far under it.
-    check(`  …within the retrieval budget`, ms < 4000, `${ms}ms`);
+    const coldStart = Date.now();
+    await queryMemoryContext(UID, 'warm up the client');
+    console.log(`cold first call: ${Date.now() - coldStart}ms  (the cap is 4000ms)`);
+
+    const cases: { q: string; expect: RegExp }[] = [
+      { q: 'am I raising money', expect: /pre-seed/i },
+      { q: 'what company do I run', expect: /Zephyrine/i },
+      { q: 'where do I live', expect: /Lisbon/i },
+    ];
+    for (const { q, expect } of cases) {
+      const started = Date.now();
+      const block = await queryMemoryContext(UID, q);
+      const ms = Date.now() - started;
+      console.log(`\n── ${JSON.stringify(q)}  (${ms}ms)`);
+      console.log(block ? block.trim().split('\n').map(l => `   ${l}`).join('\n') : '   (nothing injected)');
+      check(`recalls something for ${JSON.stringify(q)}`, block.length > 0);
+      check(`  …and it is the RIGHT fact (${expect})`, expect.test(block), block);
+      check(`  …within the retrieval budget`, ms < 4000, `${ms}ms`);
+      check(`  …no legacy raw replies`, !/ready to help|You have (the following|\d+) events/i.test(block), block);
+      const lines = block.split('\n').filter(l => l.startsWith('- '));
+      check(`  …no duplicate lines`, new Set(lines.map(l => l.toLowerCase())).size === lines.length, block);
+    }
+    await new Promise(r => setTimeout(r, 3000));
+    const dup = await upsertMemory(UID, SEEDS[1], { type: 'verify_seed', ts: Date.now().toString() });
+    if (dup) ids.push(dup);
+    check('saving the same fact again is skipped', dup === null);
+  } finally {
+    await deleteMemories(ids);
+    console.log(`\ncleaned up ${ids.length} seeded memories`);
   }
 
   console.log(`\n${failures === 0 ? '✅ all checks passed' : `❌ ${failures} check(s) failed`}`);

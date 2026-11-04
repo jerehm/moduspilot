@@ -277,7 +277,8 @@ export async function queryMemoryContext(uid: string, queryText: string): Promis
   // the same parallel block as the Google/notes/contacts fetches (1000–2900ms of
   // `context=` on their own), and it fails open, so the worst case is exactly
   // today's behaviour — no memory — rather than a slower answer with none.
-  const matches = await withCap(queryMemory(uid, queryText, 4), 4000, [], 'memory query');
+  // 8 candidates, so collapsing duplicates below still leaves three distinct facts.
+  const matches = await withCap(queryMemory(uid, queryText, 8), 4000, [], 'memory query');
 
   // 🚨 0.55 DISCARDED EVERYTHING. Cosine scores are model-specific, and 0.55 is a
   // sensible bar for OpenAI-style embeddings (relevant ≈ 0.7–0.85) — but this
@@ -302,8 +303,15 @@ export async function queryMemoryContext(uid: string, queryText: string): Promis
   // the blast radius of a marginal one.
   const MIN_SCORE = 0.10;
   const TOP_N = 3;
+  const seen = new Set<string>();
   const relevant = matches
     .filter(m => (m.score ?? 0) > MIN_SCORE)
+    .filter(m => {
+      const key = String(m.metadata?.text ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
     .slice(0, TOP_N);
   if (relevant.length > 0) {
     return '\n\nRELEVANT MEMORY FROM PAST CONVERSATIONS:\n' +
