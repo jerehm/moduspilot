@@ -96,7 +96,7 @@ export default function ComparePage() {
         rows={FREE}
       />
       <Group
-        eyebrow="MODUS · $24/mo"
+        eyebrow="MODUS · $28/mo"
         title="Every provider, auto-routed"
         blurb="Modus adds the everyday flagships from every provider. Leave it on Auto and each message goes to the model that fits."
         rows={MODUS}

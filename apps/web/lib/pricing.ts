@@ -5,9 +5,9 @@
  * Stripe price from it, so a number on the page can never drift from the number
  * on the card. Amounts here are DISPLAY dollars; Stripe holds the real amounts.
  *
- * Annual = 2 months free, chosen so MODUS lands at $20/mo effective — exactly
- * what ChatGPT Plus costs alone. That equivalence is the whole pitch; if you
- * change the discount, the "for what ChatGPT costs" copy has to change too.
+ * Annual = 2 months free. MODUS went $24 -> $28 (annual $240 -> $280) on
+ * 2026-11-04 for everyone, founders included, so annual is $23.33/mo effective
+ * and no longer equals ChatGPT Plus.
  */
 
 export type Cadence = 'monthly' | 'annual';
@@ -27,7 +27,7 @@ type PlanPricing = {
 };
 
 export const PLAN_PRICING: Record<'modus' | 'pilot', PlanPricing> = {
-  modus: { monthlyPrice: 24, annualPerMonth: 20, annualTotal: 240 },
+  modus: { monthlyPrice: 28, annualPerMonth: 23.33, annualTotal: 280 },
   pilot: { monthlyPrice: 59, annualPerMonth: 49, annualTotal: 588 },
 };
 

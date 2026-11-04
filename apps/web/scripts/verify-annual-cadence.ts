@@ -45,12 +45,12 @@ for (const plan of ['modus', 'pilot'] as const) {
   );
   check(
     `${plan}: advertised ${p.annualPerMonth}/mo matches ${p.annualTotal}/yr`,
-    Math.round(p.annualTotal / 12) === p.annualPerMonth,
+    Math.round((p.annualTotal / 12) * 100) / 100 === p.annualPerMonth || Math.round(p.annualTotal / 12) === p.annualPerMonth,
     `${p.annualTotal}/12 = ${(p.annualTotal / 12).toFixed(2)}`,
   );
 }
 // The whole reason for choosing 2 months free rather than any other number.
-check('modus annual lands on $20 (ChatGPT Plus parity)', PLAN_PRICING.modus.annualPerMonth === 20);
+check('modus annual is $280/yr ($28 x 10, set 2026-11-04)', PLAN_PRICING.modus.annualTotal === 280);
 
 console.log('\n2. Cadence parsing rejects junk');
 check('"annual" accepted', isCadence('annual'));

@@ -3,7 +3,7 @@
  *  1. Gate cookie crypto — round-trip works; tampered/forged/expired are rejected.
  *  2. Password hashing → Firestore doc-id lookup (seeds + reads a temp code).
  *  3. The claim transaction — available→claimed, resume by same uid, 409 for another uid.
- *  4. STRIPE_PRICE_MODUS is a $24/mo recurring price (read-only) → founders bill $24.
+ *  4. STRIPE_PRICE_MODUS is a $28/mo recurring price (read-only) → founders bill $28.
  * Cleans up the temp code afterward. Run: cd apps/web && npx tsx scripts/verify-founding.ts
  */
 import crypto from 'crypto';
@@ -77,11 +77,11 @@ async function main() {
   check('claim: different uid blocked (409)', blocked);
   check('claim: doc marked claimed by uidA', (await getFoundingCode(codeId))?.claimedByUid === 'uidA');
 
-  // 4. Stripe price is $24/mo (read-only)
+  // 4. Stripe price is $28/mo (read-only)
   const { stripe } = await import('@/lib/stripe');
   const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_MODUS!);
-  check('stripe: MODUS price is $24/mo recurring',
-    price.unit_amount === 2400 && price.currency === 'usd' && price.recurring?.interval === 'month',
+  check('stripe: MODUS price is $28/mo recurring',
+    price.unit_amount === 2800 && price.currency === 'usd' && price.recurring?.interval === 'month',
     `unit_amount=${price.unit_amount} ${price.currency} /${price.recurring?.interval}`);
 
   // cleanup

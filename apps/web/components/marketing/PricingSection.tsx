@@ -5,8 +5,8 @@ import { motion } from 'framer-motion';
 const PLANS = [
   {
     tier: 'MODUS',
-    price: '$24',
-    sub: '$24/mo. Billed when you subscribe · cancel anytime.',
+    price: '$28',
+    sub: '$28/mo. Billed when you subscribe · cancel anytime.',
     cta: 'Get started',
     popular: true,
     features: [
@@ -161,7 +161,7 @@ export default function PricingSection() {
           <p className="text-sm text-muted">Annual billing available, 2 months free.</p>
           <p className="text-xs text-muted/60 max-w-lg mx-auto">
             Superhuman charges $30/mo for email alone. A part-time assistant runs $1,500+/mo.
-            MODUS at $24 replaces an entire cognitive workflow category.
+            MODUS at $28 replaces an entire cognitive workflow category.
           </p>
         </motion.div>
       </div>

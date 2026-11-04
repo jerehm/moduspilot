@@ -106,7 +106,7 @@ export default function HomeSections() {
               ))}
               <div className="flex items-center justify-between px-5 py-4">
                 <span className="text-sm font-semibold text-text">Modus, all of it</span>
-                <span className="text-base font-semibold text-text">$24/mo</span>
+                <span className="text-base font-semibold text-text">$28/mo</span>
               </div>
             </div>
             <Link href="/pricing" className="inline-block mt-8 text-sm text-text underline underline-offset-4 hover:opacity-70">

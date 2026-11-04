@@ -9,7 +9,7 @@
  *   3. VERIFY — the cookie prod handed back must cryptographically verify to OUR
  *               codeId (proves it's the real signed gate, not just any 200).
  *   4. REJECT — a wrong password must be turned away with 401.
- *   5. PRICE  — STRIPE_PRICE_MODUS is a $24/mo recurring price (read-only), so a
+ *   5. PRICE  — STRIPE_PRICE_MODUS is a $28/mo recurring price (read-only), so a
  *               founder who claims really bills $24.
  *
  * DELIBERATELY stops at the gate. It never POSTs /api/founding/checkout: that
@@ -132,12 +132,12 @@ async function main() {
       check('enter: wrong password sets NO gate cookie', foundingCookie(bad) === null);
     }
 
-    // ── 5. Founders really bill $24/mo (read-only) ──
+    // ── 5. Founders really bill $28/mo (read-only) ──
     console.log(`\n── PRICE — STRIPE_PRICE_MODUS (read-only) ──`);
     const { stripe } = await import('@/lib/stripe');
     const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_MODUS!);
-    check('stripe: founding price is $24/mo recurring',
-      price.unit_amount === 2400 && price.currency === 'usd' && price.recurring?.interval === 'month',
+    check('stripe: founding price is $28/mo recurring',
+      price.unit_amount === 2800 && price.currency === 'usd' && price.recurring?.interval === 'month',
       `unit_amount=${price.unit_amount} ${price.currency} /${price.recurring?.interval}`);
   } finally {
     // ── Cleanup: only remove a code WE seeded ──
@@ -148,7 +148,7 @@ async function main() {
   }
 
   console.log(`\n${failures === 0
-    ? '✅ GRANDFATHERING GATE WORKS on prod — real password admitted, cookie is a valid signed gate, wrong key rejected, price is $24/mo.'
+    ? '✅ GRANDFATHERING GATE WORKS on prod — real password admitted, cookie is a valid signed gate, wrong key rejected, price is $28/mo.'
     : `❌ ${failures} check(s) failed — see above.`}`);
   process.exit(failures === 0 ? 0 : 1);
 }

@@ -45,7 +45,7 @@ const VS = [
   { row: 'Picking one', them: 'You pick the app, then the model inside it. Guess wrong, wrong answer.', us: 'Auto reads the task and routes it to the best model. You just type.' },
   { row: 'A second opinion', them: 'One model, one answer. You never find out what it missed.', us: 'Ask three at once, side by side, with a verdict.' },
   { row: 'Your life', them: 'A blank chat that forgets you the moment you close the tab.', us: 'Your inbox, calendar and files connected, and memory of you.' },
-  { row: 'The bill', them: '$20 here, $20 there, and up from there.', us: 'One $24 subscription. The whole stack, replaced.' },
+  { row: 'The bill', them: '$20 here, $20 there, and up from there.', us: 'One $28 subscription. The whole stack, replaced.' },
 ];
 
 export default function FeaturesPage() {

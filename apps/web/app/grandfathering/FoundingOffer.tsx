@@ -78,7 +78,7 @@ export default function FoundingOffer({ label, foundingNumber, status, claimed, 
           Your seat is secured{label ? `, ${label}` : ''}.
         </h1>
         <p className="text-sm text-muted mt-2 fm-rise" style={{ animationDelay: '0.3s' }}>
-          Founding Member No. {String(foundingNumber).padStart(3, '0')} of {cap}. Full PILOT, $24/mo, your price never rises.
+          Founding Member No. {String(foundingNumber).padStart(3, '0')} of {cap}. Full PILOT, $28/mo.
         </p>
         <button onClick={() => router.push(authReady && user ? '/dashboard' : '/login')}
           className="btn-primary mt-7 px-7 py-3.5 rounded-xl text-white text-sm font-semibold fm-rise" style={{ animationDelay: '0.4s' }}>
@@ -150,7 +150,7 @@ export default function FoundingOffer({ label, foundingNumber, status, claimed, 
             <span className="relative z-10">Claim your founding seat</span>
           </button>
           <p className="fm-rise text-[11px] text-muted/60 mt-3" style={{ animationDelay: '0.96s' }}>
-            $24/mo · billed today · price never rises · cancel anytime
+            $28/mo · billed today · cancel anytime
           </p>
         </div>
       </div>

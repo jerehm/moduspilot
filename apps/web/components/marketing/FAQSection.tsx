@@ -22,7 +22,7 @@ const FAQS = [
   },
   {
     q: 'Is there a free version?',
-    a: "Yes. Free gives you the open models (Llama, DeepSeek and Gemini Flash) with no card, on a rolling window that refreshes through the day. MODUS is $24/mo for every provider, auto-routed. PILOT is $59/mo and adds the frontier models with manual pick per message. Paid plans are billed when you subscribe. Cancel anytime.",
+    a: "Yes. Free gives you the open models (Llama, DeepSeek and Gemini Flash) with no card, on a rolling window that refreshes through the day. MODUS is $28/mo for every provider, auto-routed. PILOT is $59/mo and adds the frontier models with manual pick per message. Paid plans are billed when you subscribe. Cancel anytime.",
   },
   {
     q: 'Is my data private?',

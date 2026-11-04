@@ -4,7 +4,7 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { sendPushToUser } from '@/lib/fcm-admin';
 import { stripeId, sessionIsPaid, downgradeIfNoLiveSubscription, isAddonSubscription, customerIdsForUser, findLivePlanSubscription, subscriptionIdFromInvoice } from '@/lib/billing';
 
-const PLAN_PRICE: Record<string, string> = { modus: '$24', pilot: '$59', group: '$79' };
+const PLAN_PRICE: Record<string, string> = { modus: '$28', pilot: '$59', group: '$79' };
 
 type GrantablePlan = 'modus' | 'pilot' | 'group';
 function isGrantablePlan(p: unknown): p is GrantablePlan {
@@ -274,7 +274,7 @@ export async function POST(req: Request) {
     if (snap.data()?.trialReminderSent === true) return Response.json({ received: true });
 
     const plan = sub.metadata?.plan ?? 'modus';
-    const price = PLAN_PRICE[plan] ?? '$24';
+    const price = PLAN_PRICE[plan] ?? '$28';
     const chargeDate = sub.trial_end
       ? new Date(sub.trial_end * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
       : 'soon';

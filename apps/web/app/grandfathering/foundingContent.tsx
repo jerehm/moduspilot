@@ -54,7 +54,7 @@ export const PILOT_SAVING = PILOT_PRICE - FOUNDING_PRICE;      // the gap the of
 // The five standing founding perks (single source of truth — FoundingOffer.tsx imports this).
 export const JOURNEY_PERKS: [string, string][] = [
   ['Every frontier model', 'Full PILOT. Claude Opus 5.5, GPT-6 Astra, Gemini 4, Fable 5.1 and more.'],
-  ['$24/mo, and your price never rises', 'You stay at $24 even as prices climb for everyone else.'],
+  ['$28/mo for full PILOT', 'You pay the MODUS price and get the $59 PILOT tier.'],
   ['Founder forever', 'You keep top-tier access as Modus grows and plans change.'],
   ['A direct line to the founder', 'Reach Jeremiah directly and help shape the roadmap.'],
   ['Permanent founding badge', 'A founding mark that stays yours as Modus grows.'],

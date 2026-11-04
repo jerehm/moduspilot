@@ -75,7 +75,7 @@ const PERPLEXITY_ALTERNATIVES: Post = {
       type: 'table',
       head: ['Plan', 'Price', 'Models'],
       rows: [
-        ['MODUS', '$24/mo · $240/yr', 'Llama 3.3, DeepSeek V3.1, GPT-6.1 Sol, Claude Sonnet 5.5, Gemini 3.8 Flash'],
+        ['MODUS', '$28/mo · $280/yr', 'Llama 3.3, DeepSeek V3.1, GPT-6.1 Sol, Claude Sonnet 5.5, Gemini 3.8 Flash'],
         ['PILOT', '$59/mo · $588/yr', 'Adds Claude Opus 5.5, Claude Fable 5.1, GPT-6 Astra, Gemini 4, Llama 4 Maverick'],
       ],
     },
@@ -225,7 +225,7 @@ const MODUS_VS_PERPLEXITY: Post = {
       type: 'table',
       head: ['', 'MODUS', 'Perplexity'],
       rows: [
-        ['Entry plan', '$24/mo', '$20/mo · Pro'],
+        ['Entry plan', '$28/mo', '$20/mo · Pro'],
         ['Top plan', '**$59/mo**', '$200/mo · Max'],
         ['Annual top plan', '**$588/yr ($49/mo)**', '$2,000/yr ($167/mo)'],
         ['Multi-model', '**Compare mode**, included on PILOT', 'Model Council, 3 models, Max only'],
@@ -288,7 +288,7 @@ const MODUS_VS_PERPLEXITY: Post = {
   faq: [
     {
       q: 'Is MODUS cheaper than Perplexity?',
-      a: 'For multi-model access, substantially. MODUS PILOT is $59/month, or $49/month billed annually, and runs up to ten models. Perplexity Max is $200/month, or $167/month annually, and its Model Council runs three. The entry tiers are close: MODUS at $24/month against Perplexity Pro at $20.',
+      a: 'For multi-model access, substantially. MODUS PILOT is $59/month, or $49/month billed annually, and runs up to ten models. Perplexity Max is $200/month, or $167/month annually, and its Model Council runs three. The entry tiers are close: MODUS at $28/month against Perplexity Pro at $20.',
     },
     {
       q: 'What is the difference between Model Council and MODUS compare mode?',
@@ -406,7 +406,7 @@ const THREE_LABS: Post = {
       head: ['Plan', 'Price', 'What you get'],
       rows: [
         ['Free', '$0, no card', 'The open models on a rolling window: Llama, DeepSeek and Gemini Flash'],
-        ['MODUS', '$24/mo', 'Every provider auto routed, images, voice, mail, calendar and drive'],
+        ['MODUS', '$28/mo', 'Every provider auto routed, images, voice, mail, calendar and drive'],
         ['PILOT', '$59/mo', 'The frontier models picked by hand per message, plus compare mode'],
       ],
     },
@@ -441,7 +441,7 @@ const THREE_LABS: Post = {
     },
     {
       q: 'Can I use Claude, ChatGPT and Gemini in one app?',
-      a: 'Yes. MODUS runs models from OpenAI, Anthropic, Google, Meta and DeepSeek under one subscription, starting at $24 a month, and names the exact model that produced every answer. PILOT at $59 a month adds the frontier models and a compare mode that runs one prompt across several of them at once.',
+      a: 'Yes. MODUS runs models from OpenAI, Anthropic, Google, Meta and DeepSeek under one subscription, starting at $28 a month, and names the exact model that produced every answer. PILOT at $59 a month adds the frontier models and a compare mode that runs one prompt across several of them at once.',
     },
     {
       q: 'Is it worth paying for more than one AI subscription?',
@@ -552,7 +552,7 @@ const SUBSCRIPTION_COST: Post = {
       head: ['', 'Monthly', 'What it covers'],
       rows: [
         ['Free', '$0, no card', 'The open models on a rolling window: Llama, DeepSeek and Gemini Flash'],
-        ['MODUS', '$24.00', 'Models from every provider auto routed, plus images, voice, mail, calendar and drive'],
+        ['MODUS', '$28.00', 'Models from every provider auto routed, plus images, voice, mail, calendar and drive'],
         ['PILOT', '$59.00', 'The frontier models picked by hand, plus compare mode across many at once'],
         ['', '', ''],
         ['Three standard subs', '$59.99', 'Three separate apps, one lab each'],
@@ -580,7 +580,7 @@ const SUBSCRIPTION_COST: Post = {
     },
     {
       q: 'What is the cheapest way to use several AI models?',
-      a: 'A single subscription that carries models from several labs. MODUS starts at $24 a month for models from OpenAI, Anthropic, Google, Meta and DeepSeek, and has a free tier with no card for the open models. PILOT at $59 a month adds the frontier models and a compare mode that runs one prompt across several of them at once, which is less than three separate standard subscriptions cost.',
+      a: 'A single subscription that carries models from several labs. MODUS starts at $28 a month for models from OpenAI, Anthropic, Google, Meta and DeepSeek, and has a free tier with no card for the open models. PILOT at $59 a month adds the frontier models and a compare mode that runs one prompt across several of them at once, which is less than three separate standard subscriptions cost.',
     },
     {
       q: 'Is ChatGPT Plus or Claude Pro better value at $20?',
@@ -629,7 +629,7 @@ const MODUS_VS_CHATGPT: Post = {
       head: ['', 'MODUS', 'ChatGPT'],
       rows: [
         ['Free', '**$0, no card**, open models on a rolling window', '$0, GPT-5.6 Luna text chat'],
-        ['Entry paid', '**$24/mo**', 'Go $8/mo, Plus $20/mo'],
+        ['Entry paid', '**$28/mo**', 'Go $8/mo, Plus $20/mo'],
         ['Top plan', '**$59/mo**', 'Pro from $100/mo'],
         ['Multi-model', '**Compare mode, included on PILOT**', 'Not available at any tier'],
       ],
@@ -697,11 +697,11 @@ const MODUS_VS_CHATGPT: Post = {
     },
     {
       q: 'Is MODUS cheaper than ChatGPT?',
-      a: 'At the top tier, yes, by a wide margin: MODUS PILOT is $59 a month against ChatGPT Pro from $100. At the entry tier ChatGPT is cheaper, with Go at $8 and Plus at $20 against MODUS at $24. Both have a free tier, and the MODUS free tier needs no card.',
+      a: 'At the top tier, yes, by a wide margin: MODUS PILOT is $59 a month against ChatGPT Pro from $100. At the entry tier ChatGPT is cheaper, with Go at $8 and Plus at $20 against MODUS at $28. Both have a free tier, and the MODUS free tier needs no card.',
     },
     {
       q: 'Can you use Claude and Gemini models inside ChatGPT?',
-      a: 'No. ChatGPT serves OpenAI models only at every tier. If you want Claude or Gemini you need a separate subscription to each, or a product that carries models from several labs. MODUS does the latter, starting at $24 a month.',
+      a: 'No. ChatGPT serves OpenAI models only at every tier. If you want Claude or Gemini you need a separate subscription to each, or a product that carries models from several labs. MODUS does the latter, starting at $28 a month.',
     },
     {
       q: 'Does ChatGPT tell you which model answered?',

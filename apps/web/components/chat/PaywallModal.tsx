@@ -83,7 +83,7 @@ export default function PaywallModal({ onClose }: Props) {
         </div>
 
         <h2 className="text-xl font-bold text-text mb-1">Choose your plan</h2>
-        <p className="text-muted text-sm mb-8">Start free with open models or upgrade to MODUS at $24/mo or PILOT at $59/mo. Paid plans are billed when you subscribe. Cancel anytime.</p>
+        <p className="text-muted text-sm mb-8">Start free with open models or upgrade to MODUS at $28/mo or PILOT at $59/mo. Paid plans are billed when you subscribe. Cancel anytime.</p>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
           {/* MODUS tier */}
@@ -93,7 +93,7 @@ export default function PaywallModal({ onClose }: Props) {
               <span className="text-lg font-black text-brand">MODUS</span>
             </div>
             <div className="mb-4">
-              <span className="text-2xl font-bold text-text">$24</span>
+              <span className="text-2xl font-bold text-text">$28</span>
               <span className="text-muted text-sm">/mo</span>
             </div>
             <ul className="space-y-1.5 mb-5">
@@ -109,7 +109,7 @@ export default function PaywallModal({ onClose }: Props) {
               disabled={!!loading}
               className="w-full bg-brand text-white font-bold py-3 rounded-xl hover:bg-brand/90 transition-colors text-sm disabled:opacity-50"
             >
-              {loading === 'modus' ? 'Redirecting…' : 'Subscribe for $24/mo'}
+              {loading === 'modus' ? 'Redirecting…' : 'Subscribe for $28/mo'}
             </button>
           </div>
 

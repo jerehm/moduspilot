@@ -36,7 +36,7 @@ const FAQS = [
   },
   {
     q: 'When am I charged?',
-    a: 'Your card is charged when you subscribe: $24/mo for MODUS or $59/mo for PILOT with monthly billing. Annual subscriptions charge the full yearly amount at checkout. The Free plan never requires a card.',
+    a: 'Your card is charged when you subscribe: $28/mo for MODUS or $59/mo for PILOT with monthly billing. Annual subscriptions charge the full yearly amount at checkout. The Free plan never requires a card.',
   },
   {
     q: 'Can I cancel anytime?',
@@ -48,10 +48,10 @@ const FAQS = [
   },
   {
     q: 'Is there annual billing?',
-    // True as of 2026-07-21: price_1TvWQu... ($240) and price_1TvWR0... ($588)
+    // True as of 2026-11-04: price_1UY1uL...PBT5 ($280) and price_1TvWR0... ($588)
     // are live in Stripe and wired through /api/stripe/checkout via `cadence`.
     // The limits add-on is monthly-only, which is why it isn't mentioned here.
-    a: 'Yes. Switch the toggle above to Annually and you get 2 months free: MODUS is $240 a year, which works out at $20/mo, and PILOT is $588 a year, $49/mo. The full yearly amount is charged when you subscribe. Cancel anytime.',
+    a: 'Yes. Switch the toggle above to Annually and you get 2 months free: MODUS is $280 a year, which works out at $23.33/mo, and PILOT is $588 a year, $49/mo. The full yearly amount is charged when you subscribe. Cancel anytime.',
   },
   {
     q: 'What if I hit my limits?',

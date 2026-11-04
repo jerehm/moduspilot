@@ -16,7 +16,7 @@ const PLANS: Array<{
   {
     key: 'modus',
     label: 'MODUS',
-    price: '$24',
+    price: '$28',
     period: '/mo',
     features: [
       'Higher chat limits',

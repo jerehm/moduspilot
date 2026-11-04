@@ -166,7 +166,7 @@ export default function UsageSettings({ plan, usage }: Props) {
           ] : [
             { label: 'AI access',         value: 'Open models, no card required' },
             { label: 'Allowance',         value: 'Five-hour window plus a weekly cap' },
-            { label: 'MODUS',             value: '$24/mo' },
+            { label: 'MODUS',             value: '$28/mo' },
             { label: 'PILOT',             value: '$59/mo' },
           ]).map(row => (
             <div key={row.label} className="flex justify-between items-center py-2 border-b border-border/50 last:border-0">
@@ -192,7 +192,7 @@ export default function UsageSettings({ plan, usage }: Props) {
         <div className="surface-tint border border-tint rounded-xl p-5 flex items-center justify-between gap-4">
           <div>
             <p className="text-sm font-semibold text-text mb-1">Unlock higher limits</p>
-            <p className="text-xs text-muted">Upgrade to MODUS for $24/mo for paid models and higher usage limits.</p>
+            <p className="text-xs text-muted">Upgrade to MODUS for $28/mo for paid models and higher usage limits.</p>
           </div>
           <a
             href="#paid-plans"

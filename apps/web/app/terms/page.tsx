@@ -48,7 +48,7 @@ export default function TermsPage() {
 
         <Section title="Subscription and Payment">
           <p>Modus offers a Free plan with usage limits and paid MODUS and PILOT subscriptions. Paid subscriptions require a payment method and are billed when you subscribe at the selected billing cadence. Existing trials retain their original end date. Extra limits are available as a separate paid subscription.</p>
-          <p>Current plans: MODUS at $24/mo billed monthly, or $240/yr billed annually. PILOT at $59/mo billed monthly, or $588/yr billed annually. Annual plans are charged once up front for the full year.</p>
+          <p>Current plans: MODUS at $28/mo billed monthly, or $280/yr billed annually. PILOT at $59/mo billed monthly, or $588/yr billed annually. Annual plans are charged once up front for the full year.</p>
           <p>Payments are processed by Stripe. By subscribing you authorize us to charge your payment method on a recurring basis at the cadence you chose, until you cancel. You may cancel at any time from Settings → Billing. Cancellation takes effect at the end of your current billing period, and we do not refund partial months or partial years.</p>
           <p>Founding member seats, where offered, are billed at the price stated at the time you claim the seat, and that price is honoured for as long as the subscription stays active.</p>
           <p>We reserve the right to change pricing with 30 days notice to existing subscribers.</p>

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-const DESC = 'Start free on the open models, no card. $24/mo for every frontier model auto-routed, $59/mo for founders and executives. One subscription instead of five.';
+const DESC = 'Start free on the open models, no card. $28/mo for every frontier model auto-routed, $59/mo for founders and executives. One subscription instead of five.';
 
 export const metadata: Metadata = {
   title: 'Pricing',

@@ -12,7 +12,7 @@ const STATS: Stat[] = [
     body: 'Claude, GPT-6, Gemini, Llama and DeepSeek, every one of them, in a single chat.',
   },
   {
-    value: '$24',
+    value: '$28',
     unit: '/mo',
     label: 'Replaces ~$110/mo',
     body: 'One bill instead of ChatGPT Plus, Claude Pro, Gemini, Perplexity and Midjourney stacked together.',
