@@ -167,15 +167,24 @@ export class Workspace {
     }
     const wsBytes = files.reduce((n, f) => n + (f.path === path ? 0 : f.size), 0) + newSize;
     if (wsBytes > this.limits.maxWorkspaceBytes) throw new WorkspaceError('quota_workspace', 'This workspace is full.');
+    // The account total is every stored VERSION (history included), because
+    // that is what occupies storage. Counting only current sizes let 30 kept
+    // versions per file grow far past the cap.
+    void prevSize;
     const acct = await this.store.accountBytes();
-    if (acct - prevSize + newSize > this.limits.maxAccountBytes) throw new WorkspaceError('quota_account', 'Your file storage is full.');
+    if (acct + newSize > this.limits.maxAccountBytes) throw new WorkspaceError('quota_account', 'Your file storage is full. Delete files or old versions to make room.');
   }
 
   private async prune(id: string, current: number) {
     const keep = this.limits.keepVersions;
     if (current <= keep) return;
     const versions = await this.store.listVersions(id);
-    for (const v of versions) if (v.n <= current - keep) await this.store.deleteVersion(id, v.n);
+    for (const v of versions) {
+      if (v.n <= current - keep) {
+        await this.store.deleteVersion(id, v.n);
+        await this.store.addAccountBytes(-v.size);
+      }
+    }
   }
 
   async write(rawPath: string, content: unknown, source: FileSource): Promise<FileMeta> {
@@ -198,7 +207,7 @@ export class Workspace {
     const at = this.now();
     const meta: FileMeta = { id, path, mime, kind: 'text', size, version: n, source, updatedAt: at };
     await this.store.commit(meta, { n, size, source, at, content }, prev?.version ?? 0);
-    await this.store.addAccountBytes(size - (live?.size ?? 0));
+    await this.store.addAccountBytes(size);
     await this.prune(id, n);
     return meta;
   }
@@ -236,7 +245,7 @@ export class Workspace {
     const at = this.now();
     const meta: FileMeta = { id, path, mime: type, kind: 'binary', size: data.length, version: n, source, url, updatedAt: at };
     await this.store.commit(meta, { n, size: data.length, source, at, url, storagePath }, prev?.version ?? 0);
-    await this.store.addAccountBytes(data.length - (live?.size ?? 0));
+    await this.store.addAccountBytes(data.length);
     await this.prune(id, n);
     return meta;
   }
@@ -259,8 +268,8 @@ export class Workspace {
   async delete(rawPath: string): Promise<void> {
     const path = normalizePath(rawPath);
     const meta = await this.live(path);
+    // Soft delete: the versions stay (restore works), so the bytes stay counted.
     await this.store.putMeta({ ...meta, deleted: true, updatedAt: this.now() });
-    await this.store.addAccountBytes(-meta.size);
   }
 
   async rename(rawFrom: string, rawTo: string, source: FileSource): Promise<FileMeta> {
@@ -307,11 +316,9 @@ export class Workspace {
     if (!meta) throw new WorkspaceError('not_found', `No file at ${path}.`);
     const v = await this.version(path, n);
     if (meta.kind === 'text') return this.commitText(path, v.content ?? '', source, meta.mime);
-    const next = meta.version + 1;
-    const at = this.now();
-    const restored: FileMeta = { ...meta, deleted: false, size: v.size, url: v.url, version: next, source, updatedAt: at };
-    await this.store.commit(restored, { ...v, n: next, at, source }, meta.version);
-    await this.store.addAccountBytes(v.size - (meta.deleted ? 0 : meta.size));
-    return restored;
+    // Copy the bytes into a new version. Pointing the new version at the old
+    // object meant pruning the old version later deleted the restored file.
+    const data = await this.store.getBlob(v.storagePath ?? '');
+    return this.writeBinary(path, data, meta.mime, source);
   }
 }

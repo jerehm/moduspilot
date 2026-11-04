@@ -31,7 +31,15 @@ export interface ToolCallRecord {
   args?: string;
   result?: string;
   media: ToolMedia[];
+  /** MCP Apps widget for this call, opened in the side panel. */
+  ui?: ToolUiRef;
+  /** Workspace paths this call's media was saved to (outputs/...). */
+  saved?: string[];
+  /** Client only, never saved: the live args and full result for the widget. */
+  raw?: { args?: unknown; result?: unknown };
 }
+
+export interface ToolUiRef { serverId: string; uri: string }
 
 const ARGS_CAP = 600;
 const RESULT_CAP = 1200;
@@ -140,12 +148,16 @@ export function summarizeSteps(
     toolResults: ReadonlyArray<{ toolCallId: string; result: unknown }>;
   }>,
   serverByTool: Record<string, string>,
+  uiByTool: Record<string, ToolUiRef> = {},
 ): ToolCallRecord[] {
   const out: ToolCallRecord[] = [];
   for (const step of steps) {
     const results = new Map(step.toolResults.map(r => [r.toolCallId, r.result]));
     for (const call of step.toolCalls) {
       const has = results.has(call.toolCallId);
+      // A local__ tool runs on the user's Mac after this request ends; its
+      // result arrives with the next request, and the client saves its record.
+      if (!has && call.toolName.startsWith('local__')) continue;
       const result = results.get(call.toolCallId);
       out.push({
         id: call.toolCallId,
@@ -155,6 +167,7 @@ export function summarizeSteps(
         args: clip(stringify(call.args), ARGS_CAP),
         result: has ? resultPreview(result) : 'No result came back.',
         media: has ? extractMedia(result, { allowInline: false }) : [],
+        ...(uiByTool[call.toolName] ? { ui: uiByTool[call.toolName] } : {}),
       });
     }
   }
@@ -165,9 +178,11 @@ export function summarizeSteps(
 export function fromInvocation(
   inv: { toolCallId: string; toolName: string; args?: unknown; state: string; result?: unknown },
   serverByTool: Record<string, string>,
+  uiByTool: Record<string, ToolUiRef> = {},
 ): ToolCallRecord {
   const done = inv.state === 'result';
   return {
+    ...(uiByTool[inv.toolName] ? { ui: uiByTool[inv.toolName] } : {}),
     id: inv.toolCallId,
     tool: inv.toolName,
     server: serverByTool[inv.toolName],
@@ -175,6 +190,7 @@ export function fromInvocation(
     args: clip(stringify(inv.args), ARGS_CAP),
     result: done ? resultPreview(inv.result) : undefined,
     media: done ? extractMedia(inv.result, { allowInline: true }) : [],
+    raw: { args: inv.args, result: done ? inv.result : undefined },
   };
 }
 
@@ -207,17 +223,50 @@ export function humanTool(name: string): string {
 }
 
 /** Reads the saved `modusTools` / `modusToolServers` annotations off a message. */
-export function readToolAnnotations(m: unknown): { calls: ToolCallRecord[]; servers: Record<string, string> } {
+export function readToolAnnotations(m: unknown): { calls: ToolCallRecord[]; servers: Record<string, string>; ui: Record<string, ToolUiRef> } {
   const anns = (m as { annotations?: unknown[] })?.annotations;
   let calls: ToolCallRecord[] = [];
   let servers: Record<string, string> = {};
+  let ui: Record<string, ToolUiRef> = {};
   if (Array.isArray(anns)) {
     for (const a of anns) {
       if (!a || typeof a !== 'object') continue;
       const o = a as Record<string, unknown>;
       if (Array.isArray(o.modusTools)) calls = o.modusTools as ToolCallRecord[];
       if (o.modusToolServers && typeof o.modusToolServers === 'object') servers = o.modusToolServers as Record<string, string>;
+      if (o.modusToolUi && typeof o.modusToolUi === 'object') ui = o.modusToolUi as Record<string, ToolUiRef>;
     }
   }
-  return { calls, servers };
+  return { calls, servers, ui };
+}
+
+/**
+ * The annotations to persist for a message, with every live tool invocation
+ * folded into its modusTools record.
+ *
+ * The server writes modusTools per request, but a local__ tool (desktop) runs
+ * between requests, so no request ever sees its result. Folding the client's
+ * invocations in at save time keeps every call, local or not, after a reload.
+ * Saved copies stay bounded: no raw values, no inline base64.
+ */
+export function annotationsForSave(m: unknown): unknown[] | undefined {
+  const anns = (m as { annotations?: unknown[] })?.annotations;
+  const live = (m as { toolInvocations?: { toolCallId: string; toolName: string; args?: unknown; state: string; result?: unknown }[] })?.toolInvocations;
+  if (!Array.isArray(live) || live.length === 0) return anns;
+  const { calls: saved, servers, ui } = readToolAnnotations(m);
+  const byId = new Map(saved.map(r => [r.id, r]));
+  for (const inv of live) {
+    if (inv.state !== 'result') continue;
+    const rec = fromInvocation(inv, servers, ui);
+    const prev = byId.get(rec.id);
+    byId.set(rec.id, {
+      ...rec,
+      raw: undefined,
+      media: extractMedia(inv.result, { allowInline: false }),
+      ...(prev?.saved ? { saved: prev.saved } : {}),
+    });
+  }
+  const merged = [...byId.values()].map(({ raw: _raw, ...r }) => r);
+  const rest = (Array.isArray(anns) ? anns : []).filter(a => !(a && typeof a === 'object' && 'modusTools' in (a as object)));
+  return [...rest, { modusTools: merged }];
 }

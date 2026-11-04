@@ -115,8 +115,12 @@ export async function purgeWorkspaces(uid: string, opts: { keep?: (wsId: string)
   let remaining = 0;
   if (opts.keep) {
     for (const ref of await wsCol.listDocuments()) {
+      // Every stored version counts (see Workspace.checkQuota), deleted files included.
       const snap = await ref.collection('files').get();
-      for (const d of snap.docs) if (!d.data().deleted) remaining += Number(d.data().size ?? 0);
+      for (const d of snap.docs) {
+        const vs = await d.ref.collection('versions').select('size').get();
+        for (const v of vs.docs) remaining += Number(v.data().size ?? 0);
+      }
     }
   }
   const usage = adminDb.collection('workspaceUsage').doc(uid);

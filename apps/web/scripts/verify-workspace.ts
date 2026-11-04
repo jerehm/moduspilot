@@ -103,6 +103,28 @@ async function main() {
   check('workspace quota', await code(ws.writeBinary('outputs/huge.bin', Buffer.alloc(2900), 'application/octet-stream', 'tool')) === 'quota_workspace');
   check('account bytes never negative', store.acct >= 0, store.acct);
 
+  // Accounting counts every stored version; pruning frees; binary restore copies.
+  {
+    const st = memStore();
+    const w = new Workspace(st, { ...DEFAULT_LIMITS, keepVersions: 2, maxAccountBytes: 10_000 });
+    await w.write('a.txt', 'x'.repeat(100), 'model');
+    await w.write('a.txt', 'y'.repeat(100), 'model');
+    check('two versions count twice', st.acct === 200, st.acct);
+    await w.write('a.txt', 'z'.repeat(100), 'model');
+    check('pruned version is freed', st.acct === 200, st.acct);
+    await w.delete('a.txt');
+    check('soft delete keeps bytes (history kept)', st.acct === 200, st.acct);
+    await w.writeBinary('b.png', Buffer.alloc(300, 1), 'image/png', 'tool');
+    await w.writeBinary('b.png', Buffer.alloc(300, 2), 'image/png', 'tool');
+    const r = await w.restore('b.png', 1, 'user');
+    check('binary restore is a new version', r.version === 3);
+    const v2 = await w.version('b.png', 3);
+    check('restored version owns its own object', !!v2.storagePath && st.blobs.has(v2.storagePath!) && v2.storagePath !== (await w.version('b.png', 2)).storagePath);
+    await w.writeBinary('b.png', Buffer.alloc(300, 3), 'image/png', 'tool');
+    check('pruning old versions leaves restored bytes intact', st.blobs.has(v2.storagePath!) && (await st.getBlob(v2.storagePath!))[0] === 1);
+    check('history cannot exceed the account cap', await code(w.writeBinary('big.bin', Buffer.alloc(9_500), 'application/octet-stream', 'tool')) === 'quota_account', st.acct);
+  }
+
   console.log(failures === 0 ? '\nAll checks passed.' : `\n${failures} failed.`);
   process.exit(failures ? 1 : 0);
 }

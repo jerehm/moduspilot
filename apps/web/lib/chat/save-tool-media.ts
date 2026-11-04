@@ -31,9 +31,26 @@ async function fetchMedia(url: string): Promise<{ data: Buffer; mime: string } |
     const data = Buffer.from(m[2], 'base64');
     return data.length <= MAX_BYTES ? { data, mime: m[1] } : null;
   }
-  await assertPublicUrl(url);
-  const res = await fetch(url, { signal: AbortSignal.timeout(PER_FILE_MS), redirect: 'follow' });
-  if (!res.ok) return null;
+  // Redirects are followed by hand so every hop is checked: a public link that
+  // 302s to an internal address must not get through on the first check.
+  let current = url;
+  let res: Response | null = null;
+  const signal = AbortSignal.timeout(PER_FILE_MS);
+  for (let hop = 0; hop < 4; hop++) {
+    await assertPublicUrl(current);
+    res = await fetch(current, { signal, redirect: 'manual' });
+    if (res.status >= 300 && res.status < 400) {
+      const loc = res.headers.get('location');
+      if (!loc) return null;
+      current = new URL(loc, current).toString();
+      if (!/^https:\/\//i.test(current)) return null;
+      res = null;
+      continue;
+    }
+    break;
+  }
+  if (!res || !res.ok) return null;
+  url = current;
   const mime = (res.headers.get('content-type') ?? '').split(';')[0].trim() || mimeFor(new URL(url).pathname);
   if (!/^(image|video|audio)\//.test(mime)) return null;
   const len = Number(res.headers.get('content-length') ?? 0);
