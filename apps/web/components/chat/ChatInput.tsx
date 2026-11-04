@@ -73,6 +73,9 @@ export default function ChatInput({
   docked = true,
 }: Props) {
   const [recording, setRecording] = useState(false);
+  // Between stopping the recording and the transcript arriving the mic looked
+  // idle for seconds, which reads as broken (11-03 audit round 3).
+  const [transcribing, setTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
   const [extracting, setExtracting] = useState<string | null>(null);
@@ -115,6 +118,7 @@ export default function ChatInput({
   }
 
   async function toggleRecording() {
+    if (transcribing) return;
     if (recording) { mediaRef.current?.stop(); setRecording(false); return; }
     let stream: MediaStream;
     try {
@@ -124,7 +128,16 @@ export default function ChatInput({
       setTimeout(() => setVoiceError(''), 3000);
       return;
     }
-    const recorder = new MediaRecorder(stream);
+    let recorder: MediaRecorder;
+    try {
+      recorder = new MediaRecorder(stream);
+    } catch {
+      // Unsupported browser: this threw uncaught and the mic just did nothing.
+      stream.getTracks().forEach(t => t.stop());
+      setVoiceError('Voice input is not supported in this browser.');
+      setTimeout(() => setVoiceError(''), 4000);
+      return;
+    }
     chunksRef.current = [];
     recorder.ondataavailable = e => chunksRef.current.push(e.data);
     recorder.onstop = async () => {
@@ -142,12 +155,17 @@ export default function ChatInput({
       const blob = new Blob(chunksRef.current, { type });
       const form = new FormData();
       form.append('audio', blob, `audio.${extForAudioType(type)}`);
-      const idToken = await auth.currentUser?.getIdToken();
+      setTranscribing(true);
+      // A hung upload used to leave nothing on screen until the server gave up.
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 30000);
       try {
+        const idToken = await auth.currentUser?.getIdToken();
         const res = await fetch('/api/transcribe', {
           method: 'POST',
           headers: idToken ? { Authorization: `Bearer ${idToken}` } : undefined,
           body: form,
+          signal: ctrl.signal,
         });
         const data = await res.json().catch(() => ({})) as { text?: string; error?: string };
         // Surface failures (rate limit, audio too large, transcription error) and
@@ -162,6 +180,9 @@ export default function ChatInput({
       } catch {
         setVoiceError('Could not transcribe that. Try again.');
         setTimeout(() => setVoiceError(''), 4000);
+      } finally {
+        clearTimeout(timer);
+        setTranscribing(false);
       }
     };
     recorder.start();
@@ -474,10 +495,12 @@ export default function ChatInput({
             )}
           </AnimatePresence>
 
-          <Tooltip label={recording ? 'Stop recording' : 'Voice input'} side="top" className="shrink-0">
+          <Tooltip label={transcribing ? 'Transcribing...' : recording ? 'Stop recording' : 'Voice input'} side="top" className="shrink-0">
             <motion.button
               type="button"
               onClick={toggleRecording}
+              disabled={transcribing}
+              aria-label={transcribing ? 'Transcribing' : recording ? 'Stop recording' : 'Voice input'}
               whileTap={{ scale: 0.85 }}
               className={`relative shrink-0 transition-colors pb-0.5 ${recording ? 'text-red-400' : 'text-muted hover:text-text'}`}
             >
@@ -489,9 +512,15 @@ export default function ChatInput({
                   transition={{ duration: 1.4, repeat: Infinity, ease: 'easeOut' }}
                 />
               )}
+              {transcribing ? (
+                <span className="relative block w-5 h-5 p-[3px]">
+                  <span className="block w-full h-full border-2 border-current border-t-transparent rounded-full animate-spin" />
+                </span>
+              ) : (
               <svg className="relative w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 0 0 6-6v-1.5m-6 7.5a6 6 0 0 1-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 0 1-3-3V4.5a3 3 0 1 1 6 0v8.25a3 3 0 0 1-3 3Z" />
               </svg>
+              )}
             </motion.button>
           </Tooltip>
 

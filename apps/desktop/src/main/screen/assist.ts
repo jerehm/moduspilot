@@ -46,15 +46,55 @@ export interface AssistError {
  * renders nothing on any of them is the blank-bubble failure this codebase has
  * already paid for twice — every one of these must produce visible words.
  */
+/**
+ * "It resets in about 3 hours." from the 429 body's `resetAt` (ms). Mirrors
+ * resetPhrase in apps/web/lib/chat/client-errors.ts; main cannot import web code.
+ */
+export function resetPhrase(body: string, now = Date.now()): string {
+  const at = Number(/"resetAt"\s*:\s*(\d{10,})/.exec(body)?.[1]);
+  if (!Number.isFinite(at) || at <= now) return 'Try again in a few hours.';
+  const mins = Math.ceil((at - now) / 60000);
+  if (mins < 60) return `It resets in about ${mins} minute${mins === 1 ? '' : 's'}.`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `It resets in about ${hours} hour${hours === 1 ? '' : 's'}.`;
+  return `It resets on ${new Date(at).toLocaleDateString(undefined, { weekday: 'long' })}.`;
+}
+
+/**
+ * The route's stream error TOKENS (getErrorMessage in app/api/chat/route.ts),
+ * which the overlay used to print verbatim: a user saw "chat_error". Anything
+ * that is not a bare code is already a sentence and passes through.
+ */
+export function readableStreamError(token: string): string {
+  const t = token.trim().toLowerCase();
+  if (!/^[a-z0-9_]+$/.test(t)) return token || 'Something went wrong. Try again.';
+  if (t === 'rate_limit_reached' || t === 'all_models_busy' || t === 'message_too_large') return 'MODUS is briefly busy. Try again in a few seconds.';
+  if (t === 'groq_daily_limit') return 'That model hit its daily limit. Switch models in MODUS or try again tomorrow.';
+  if (t === 'provider_down') return 'The AI service is down for a moment. Try again shortly.';
+  if (t === 'api_key_error') return 'MODUS has a configuration problem. Contact support.';
+  return 'Something went wrong. Try again.';
+}
+
 function errorForStatus(status: number, body: string): AssistError {
+  const code = (/"error"\s*:\s*"([a-z0-9_]+)"/.exec(body)?.[1] ?? '');
   if (status === 401) {
     return { kind: 'signed-out', message: 'Open MODUS and sign in, then try again.' };
   }
   if (status === 402) {
+    // 402 is NOT only "no subscription". A free account that used its 5h window
+    // got told its trial had ended, and Screen Assist always sends an image, so a
+    // free account hits image_requires_subscription on the very first ask.
+    if (code === 'free_limit_reached') {
+      return { kind: 'limit', message: "You've hit your free limit for now. It refreshes soon, or upgrade in MODUS." };
+    }
+    if (code === 'image_requires_subscription') {
+      return { kind: 'no-subscription', message: 'Reading your screen needs a paid plan. Open MODUS to upgrade.' };
+    }
     return { kind: 'no-subscription', message: 'Your trial or subscription has ended. Open MODUS to restart it.' };
   }
   if (status === 429) {
-    return { kind: 'limit', message: "You've reached your plan's limit for now. It resets shortly." };
+    if (code === 'token_limit_reached') return { kind: 'limit', message: `You've hit your usage limit. ${resetPhrase(body)}` };
+    return { kind: 'limit', message: "You've reached your plan's limit for now. Try again shortly." };
   }
   log.error(`[assist] chat API ${status}: ${body.slice(0, 300)}`);
   return { kind: 'server', message: `MODUS could not answer (${status}). Try again in a moment.` };
@@ -94,7 +134,7 @@ export function handleFrame(line: string, events: AssistEvents): void {
       if (typeof value === 'string') events.onDelta(value);
       break;
     case '3':
-      events.onError({ kind: 'server', message: typeof value === 'string' ? value : 'Something went wrong.' });
+      events.onError({ kind: 'server', message: readableStreamError(typeof value === 'string' ? value : '') });
       break;
     case '8':
       if (Array.isArray(value)) {
@@ -184,6 +224,9 @@ export const WATCH_MODEL = 'gemini-3.5-flash-lite';
 export interface AskOptions {
   /** Skip the life-OS context assembly server-side. See body.screenMode. */
   screenMode?: boolean;
+  /** Tests only: a token instead of reading the main window, and a short stall cap. */
+  token?: string;
+  stallMs?: number;
   /** Pin this request to a specific model, regardless of the saved Brain. */
   modelChoice?: string;
   /**
@@ -335,8 +378,15 @@ export function trimForRequest(messages: AssistTurn[]): AssistTurn[] {
   return [head, ...tail];
 }
 
+/**
+ * Inactivity cap, same 45s as web chat. A hung answer used to sit on "thinking"
+ * until the server's 300s kill. Reset on every chunk, so a slow but live answer
+ * is never cut off; covers the wait for the response as well as the body.
+ */
+const STALL_MS = 45000;
+
 export async function ask(opts: AskOptions, events: AssistEvents): Promise<void> {
-  const token = await getIdToken();
+  const token = opts.token ?? await getIdToken();
   if (!token) {
     // Distinct from a 401: there is no signed-in window to take a token from at
     // all, e.g. the user never signed in or the window is still loading.
@@ -344,11 +394,27 @@ export async function ask(opts: AskOptions, events: AssistEvents): Promise<void>
     return;
   }
 
+  // Our own controller, chained to the caller's, so the stall cap can abort and
+  // still be told apart from a caller cancel (which must stay silent).
+  const ctrl = new AbortController();
+  const onOuterAbort = (): void => ctrl.abort();
+  if (opts.signal?.aborted) ctrl.abort();
+  opts.signal?.addEventListener('abort', onOuterAbort);
+  let stalled = false;
+  let stallTimer: ReturnType<typeof setTimeout> | undefined;
+  const arm = (): void => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => { stalled = true; ctrl.abort(); }, opts.stallMs ?? STALL_MS);
+  };
+  const cleanup = (): void => { clearTimeout(stallTimer); opts.signal?.removeEventListener('abort', onOuterAbort); };
+  const stallError: AssistError = { kind: 'server', message: 'The answer stalled. Try again.' };
+  arm();
+
   let res: Response;
   try {
     res = await fetch(CHAT_URL, {
       method: 'POST',
-      signal: opts.signal,
+      signal: ctrl.signal,
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         messages: trimForRequest(opts.messages),
@@ -366,6 +432,8 @@ export async function ask(opts: AskOptions, events: AssistEvents): Promise<void>
     // An abort is the caller's own doing, so it needs no error message — but it
     // DOES need a terminal event. Returning silently left the panel showing
     // "Stop" with nothing running, and the only way out was to close it.
+    cleanup();
+    if (stalled) { events.onError(stallError); return; }
     if ((err as Error)?.name === 'AbortError') { events.onAborted(); return; }
     log.error('[assist] request failed', err);
     events.onError({ kind: 'offline', message: 'No connection to MODUS. Check your network.' });
@@ -374,10 +442,12 @@ export async function ask(opts: AskOptions, events: AssistEvents): Promise<void>
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
+    cleanup();
     events.onError(errorForStatus(res.status, body));
     return;
   }
   if (!res.body) {
+    cleanup();
     events.onError({ kind: 'server', message: 'MODUS returned an empty response.' });
     return;
   }
@@ -385,15 +455,27 @@ export async function ask(opts: AskOptions, events: AssistEvents): Promise<void>
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   const frames = createFrameParser(events);
+  // Race each read against the abort too: not every fetch errors the body
+  // stream promptly on abort. ONE promise, not a listener per chunk.
+  const aborted = new Promise<'stalled'>((resolve) => {
+    if (ctrl.signal.aborted) resolve('stalled');
+    else ctrl.signal.addEventListener('abort', () => resolve('stalled'), { once: true });
+  });
   try {
     for (;;) {
-      const { done, value } = await reader.read();
+      arm();
+      const next = await Promise.race([reader.read(), aborted]);
+      if (next === 'stalled') { reader.cancel().catch(() => {}); throw Object.assign(new Error('aborted'), { name: 'AbortError' }); }
+      const { done, value } = next;
       if (done) break;
       frames.push(decoder.decode(value, { stream: true }));
     }
     frames.flush();
+    cleanup();
     events.onDone();
   } catch (err) {
+    cleanup();
+    if (stalled) { events.onError(stallError); return; }
     if ((err as Error)?.name === 'AbortError') { events.onAborted(); return; }
     log.error('[assist] stream failed', err);
     events.onError({ kind: 'server', message: 'The answer was cut off. Try again.' });

@@ -1371,6 +1371,13 @@ function ProjectDetailPageContent() {
               className="flex-1 bg-transparent text-sm text-text placeholder:text-muted outline-none resize-none max-h-32"
               style={{ height: 'auto', minHeight: '1.5rem' }}
             />
+            {isLoading ? (
+              // Same Stop as /chat: there was no way to stop a reply here.
+              <button type="button" onClick={stop} aria-label="Stop" title="Stop"
+                className="w-7 h-7 rounded-lg bg-brand flex items-center justify-center hover:bg-brand/90 shrink-0">
+                <span className="w-2.5 h-2.5 rounded-[2px] bg-white" />
+              </button>
+            ) : (
             <button
               type="submit"
               disabled={!input.trim() || isLoading}
@@ -1380,6 +1387,7 @@ function ProjectDetailPageContent() {
                 <line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" />
               </svg>
             </button>
+            )}
           </div>
         </form>
       </div>

@@ -101,7 +101,9 @@ export async function POST(req: Request) {
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
     console.error('[tts] OpenAI error', res.status, detail);
-    return Response.json({ error: `OpenAI ${res.status}: ${detail}` }, { status: 500 });
+    // The raw provider body went to the client, and mobile shows `error` in an
+    // alert: users saw "OpenAI 401: {json}". The detail stays in the log above.
+    return Response.json({ error: 'Voice is unavailable right now. Try again in a moment.' }, { status: 502 });
   }
 
   const buffer = await res.arrayBuffer();

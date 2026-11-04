@@ -91,7 +91,11 @@ export function useVoiceInput(onResult: (text: string) => void): {
       });
 
       if (res.status < 200 || res.status >= 300) {
-        setError('Could not transcribe that. Try again.');
+        // Show the server's own words when it sent some ("Daily voice limit
+        // reached"); a limit used to read as a broken recording.
+        let serverMsg = '';
+        try { serverMsg = String((JSON.parse(res.body) as { error?: string }).error ?? ''); } catch {}
+        setError(serverMsg && !/^[a-z0-9_]+$/.test(serverMsg) ? serverMsg : 'Could not transcribe that. Try again.');
         return;
       }
       const data = JSON.parse(res.body) as { text?: string; error?: string };

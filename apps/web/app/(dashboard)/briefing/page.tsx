@@ -698,9 +698,10 @@ const QUICK_CHIPS = [
   { label: "Something's on my mind",     fill: '' },
 ];
 
-function ClosingChatBar({ input, onChange, onSubmit, onChip, isLoading }: {
+function ClosingChatBar({ input, onChange, onSubmit, onChip, isLoading, onStop }: {
   input: string; onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onSubmit: (e: React.FormEvent) => void; onChip: (fill: string) => void; isLoading: boolean;
+  onStop?: () => void;
 }) {
   return (
     <div className="bg-panel border border-border rounded-xl overflow-hidden">
@@ -719,10 +720,18 @@ function ClosingChatBar({ input, onChange, onSubmit, onChip, isLoading }: {
       <form onSubmit={onSubmit} className="flex items-center gap-2 px-3 py-2.5">
         <input value={input} onChange={onChange} placeholder="Type anything or just say what's on your mind..."
           className="flex-1 bg-transparent text-[13px] text-text placeholder:text-muted/50 outline-none border-none" />
+        {isLoading && onStop ? (
+          // Same Stop as /chat: there was no way to stop a reply here.
+          <button type="button" onClick={onStop} aria-label="Stop" title="Stop"
+            className="w-8 h-8 rounded-full bg-text flex items-center justify-center shrink-0 cursor-pointer">
+            <span className="w-2.5 h-2.5 rounded-[2px] bg-panel" />
+          </button>
+        ) : (
         <button type="submit" disabled={!input.trim() || isLoading}
           className="w-8 h-8 rounded-full bg-text flex items-center justify-center text-panel shrink-0 disabled:opacity-30 transition-opacity cursor-pointer">
           <IconArrowUp />
         </button>
+        )}
       </form>
     </div>
   );
@@ -1557,7 +1566,7 @@ function BriefingContent({ briefing, onEnergySelect, settings, saveMessages, aut
 
         <div className="mt-4">
           <FadeCard delay={0.42}>
-            <ClosingChatBar input={input} onChange={handleInputChange} onSubmit={handleSubmit} onChip={handleChip} isLoading={isLoading} />
+            <ClosingChatBar input={input} onChange={handleInputChange} onSubmit={handleSubmit} onChip={handleChip} isLoading={isLoading} onStop={stop} />
           </FadeCard>
         </div>
       </div>

@@ -1302,12 +1302,20 @@ function GoalDetailPageContent() {
             <form onSubmit={handleSubmit} className="flex items-center gap-3 px-4 py-3">
               <input value={input} onChange={handleInputChange} placeholder="Message Modus…"
                 className="flex-1 bg-transparent text-sm text-text placeholder:text-muted/40 outline-none border-none" />
+              {isLoading ? (
+                // Same Stop as /chat: there was no way to stop a reply here.
+                <button type="button" onClick={stop} aria-label="Stop" title="Stop"
+                  className="w-7 h-7 rounded-full bg-text flex items-center justify-center shrink-0">
+                  <span className="w-2.5 h-2.5 rounded-[2px] bg-panel" />
+                </button>
+              ) : (
               <button type="submit" disabled={!input.trim() || isLoading}
                 className="w-7 h-7 rounded-full bg-text flex items-center justify-center text-panel shrink-0 disabled:opacity-30 transition-opacity">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>
                 </svg>
               </button>
+              )}
             </form>
           </div>
         </div>

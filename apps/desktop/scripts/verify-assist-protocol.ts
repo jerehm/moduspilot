@@ -16,7 +16,7 @@
  *
  *   cd apps/desktop && npx tsx scripts/verify-assist-protocol.ts
  */
-import { buildTurn, buildWatchTurn, createFrameParser, handleFrame, trimForRequest, MAX_TURNS, SCREEN_PROMPT, WATCH_PROMPT, DEFAULT_QUESTION, type AssistEvents, type AssistTurn } from '../src/main/screen/assist';
+import { ask, buildTurn, buildWatchTurn, createFrameParser, handleFrame, trimForRequest, MAX_TURNS, SCREEN_PROMPT, WATCH_PROMPT, DEFAULT_QUESTION, type AssistEvents, type AssistTurn } from '../src/main/screen/assist';
 
 let failures = 0;
 function check(name: string, ok: boolean, detail = ''): void {
@@ -296,5 +296,57 @@ console.log('\nStream parsing\n');
   check('the protocol itself never leaks into the text', !r.text.includes('0:'), JSON.stringify(r.text));
 }
 
+void (async () => {
+console.log('\nEvery request ends in words on screen (11-03 audit round 3)\n');
+
+{
+  const enc = new TextEncoder();
+  const realFetch = globalThis.fetch;
+  /** Run the REAL ask() against a faked server and collect what it emits. */
+  async function run(fake: (signal: AbortSignal) => Promise<Response>, outer?: AbortController) {
+    globalThis.fetch = ((_u: unknown, init?: RequestInit) => fake(init!.signal!)) as typeof fetch;
+    const r = recorder();
+    await ask({ messages: [buildTurn('hi', 'IMG', true)], token: 't', stallMs: 300, signal: outer?.signal }, r);
+    globalThis.fetch = realFetch;
+    return r;
+  }
+  const stream = (chunks: string[], hang = false) => new Response(new ReadableStream({
+    start(c) { for (const ch of chunks) c.enqueue(enc.encode(ch)); if (!hang) c.close(); },
+  }), { status: 200 });
+  const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+  const never = (signal: AbortSignal) => new Promise<Response>((_res, rej) =>
+    signal.addEventListener('abort', () => rej(Object.assign(new Error('aborted'), { name: 'AbortError' }))));
+
+  let r = await run(async () => stream(['0:"Hello "\n', '0:"there"\n', 'd:{"finishReason":"stop"}\n']));
+  check('a normal answer streams and finishes', r.text === 'Hello there' && r.done === 1 && r.errors.length === 0, JSON.stringify(r));
+
+  r = await run(async () => stream(['3:"chat_error"\n']));
+  check('a stream error CODE is shown as words, not "chat_error"', r.errors.length === 1 && !r.errors[0].includes('_'), r.errors[0]);
+
+  r = await run(async () => stream(['3:"rate_limit_reached"\n']));
+  check('rate_limit_reached reads as busy', /busy/i.test(r.errors[0] ?? ''), r.errors[0]);
+
+  r = await run(async () => stream(['0:"half"\n'], true));
+  check('a body that goes silent ends in a stall message', r.errors.some(e => /stalled/i.test(e)) && r.aborted === 0, JSON.stringify(r.errors));
+
+  r = await run(never);
+  check('a request that never gets a response ends in a stall message', r.errors.some(e => /stalled/i.test(e)) && r.aborted === 0, JSON.stringify(r.errors));
+
+  r = await run(async () => json(402, { error: 'free_limit_reached' }));
+  check('402 free_limit_reached says FREE limit, not "trial ended"', /free limit/i.test(r.errors[0] ?? '') && !/trial/i.test(r.errors[0] ?? ''), r.errors[0]);
+
+  r = await run(async () => json(402, { error: 'image_requires_subscription' }));
+  check('402 image_requires_subscription names the paid plan', /paid plan/i.test(r.errors[0] ?? ''), r.errors[0]);
+
+  r = await run(async () => json(429, { error: 'token_limit_reached', resetAt: Date.now() + 3 * 3600e3 }));
+  check('429 token_limit_reached says when it resets', /resets in about 3 hours/.test(r.errors[0] ?? ''), r.errors[0]);
+
+  const outer = new AbortController();
+  setTimeout(() => outer.abort(), 50);
+  r = await run(never, outer);
+  check('a caller cancel stays SILENT (onAborted, no error)', r.aborted === 1 && r.errors.length === 0, JSON.stringify(r));
+}
+
 console.log(`\n${failures === 0 ? '✅ PASS' : `❌ ${failures} FAILED`}\n`);
 process.exit(failures === 0 ? 0 : 1);
+})();
