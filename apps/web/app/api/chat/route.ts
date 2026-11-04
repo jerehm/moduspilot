@@ -4,6 +4,7 @@ import { withToolHeartbeat } from '@/lib/chat/tool-heartbeat';
 import { isWorkspaceId } from '@/lib/workspace';
 import { openWorkspace } from '@/lib/workspace-store';
 import { workspaceTools, workspacePromptBlock, WORKSPACE_SERVER_LABEL } from '@/lib/chat/workspace-tools';
+import { saveToolMedia } from '@/lib/chat/save-tool-media';
 import type { CoreMessage } from 'ai';
 import { MODUS_SYSTEM_PROMPT, SCREEN_ASSIST_SYSTEM_PROMPT, looksLikePromptExtraction, PROMPT_EXTRACTION_REMINDER, PROJECT_CHAT_RULES } from '@/lib/claude';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
@@ -1181,6 +1182,15 @@ export async function POST(req: Request) {
         // Save what the tools did. useConversations persists content and
         // annotations only, so without this every tool call vanishes on reload.
         const toolRecords = summarizeSteps(steps ?? [], mcpServerByTool, mcpUiByTool);
+        // Plugin media into outputs/ before the record is sent, so the card can
+        // link the saved copy. Bounded inside saveToolMedia (30s total).
+        if (uid && workspaceId && toolRecords.some(r => r.server !== WORKSPACE_SERVER_LABEL && r.state === 'done')) {
+          try {
+            await saveToolMedia(openWorkspace(uid, workspaceId), steps ?? [], toolRecords);
+          } catch (e) {
+            console.error('[chat] saveToolMedia failed:', String(e));
+          }
+        }
         // A widget renders from the FULL result (structuredContent), which the
         // saved record clips. Keep it per call, off the conversation doc, so a
         // reopened chat can still feed its widget.

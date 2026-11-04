@@ -1,6 +1,8 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { WorkspaceContext as Ctx, type Tab, type WorkspaceCtx } from './workspace-context';
+export { useWorkspacePanel, useWidgetPanel } from './workspace-context';
 import MarkdownMessage from '@/components/chat/MarkdownMessage';
 import { McpAppFrame, type WidgetTarget } from './WidgetPanel';
 import { wsApi, fmtAge, fmtSize, type FileMeta, type VersionDoc } from '@/lib/workspace-client';
@@ -14,31 +16,10 @@ import { humanTool } from '@/lib/chat/tool-activity';
  * can open a file or a widget without prop drilling.
  */
 
-type Tab = 'files' | 'preview' | 'widget';
-
-interface WorkspaceCtx {
-  workspaceId?: string;
-  /** Whether the panel is showing; the composer drops its key hint for room. */
-  isOpen: boolean;
-  openWidget: (t: WidgetTarget) => void;
-  openFile: (path: string) => void;
-  showFiles: () => void;
-  toggleFiles: () => void;
-  refresh: () => void;
-}
-
 // Panel state per workspace, kept across remounts. A new chat's window
 // remounts when its draft becomes a real conversation (ChatWindow key), right
 // as the first turn's file opens itself; this is what keeps it open.
 const memory = new Map<string, { open: boolean; tab: Tab; previewPath: string | null }>();
-
-const Ctx = createContext<WorkspaceCtx | null>(null);
-export function useWorkspacePanel(): WorkspaceCtx | null { return useContext(Ctx); }
-/** Back-compat for the widget row in ToolActivity. */
-export function useWidgetPanel(): { open: (t: WidgetTarget) => void } | null {
-  const c = useContext(Ctx);
-  return useMemo(() => (c ? { open: c.openWidget } : null), [c]);
-}
 
 // ── File tree ────────────────────────────────────────────────────────────────
 

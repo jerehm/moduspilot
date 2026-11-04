@@ -10,7 +10,7 @@ import {
   type ToolCallRecord,
   type ToolMedia,
 } from '@/lib/chat/tool-activity';
-import { useWidgetPanel, useWorkspacePanel } from '@/components/workspace/WorkspacePanel';
+import { useWidgetPanel, useWorkspacePanel } from '@/components/workspace/workspace-context';
 
 /**
  * The record of tool calls on one assistant turn. Live invocations win while
@@ -22,7 +22,15 @@ export function toolCallsFor(message: Message): ToolCallRecord[] {
   const live = (message as any).toolInvocations as
     | { toolCallId: string; toolName: string; args?: unknown; state: string; result?: unknown }[]
     | undefined;
-  if (Array.isArray(live) && live.length > 0) return live.map(inv => fromInvocation(inv, servers, ui));
+  if (Array.isArray(live) && live.length > 0) {
+    // The end-of-turn record knows where media was saved; live invocations don't.
+    const savedById = new Map(saved.map(r => [r.id, r.saved]));
+    return live.map(inv => {
+      const rec = fromInvocation(inv, servers, ui);
+      const paths = savedById.get(inv.toolCallId);
+      return paths?.length ? { ...rec, saved: paths } : rec;
+    });
+  }
   return saved;
 }
 
@@ -154,6 +162,22 @@ function FileRow({ call }: { call: ToolCallRecord }) {
   );
 }
 
+function SavedRows({ call }: { call: ToolCallRecord }) {
+  const ws = useWorkspacePanel();
+  if (!ws?.workspaceId || !call.saved?.length) return null;
+  return (
+    <>
+      {call.saved.map(p => (
+        <button key={p} type="button" onClick={() => ws.openFile(p)} className="flex items-center gap-2 text-xs text-muted hover:text-text transition-colors">
+          <span>Saved</span>
+          <span className="text-text/80 font-mono">{p}</span>
+          <span aria-hidden>›</span>
+        </button>
+      ))}
+    </>
+  );
+}
+
 export default function ToolActivity({ calls }: { calls: ToolCallRecord[] }) {
   const [open, setOpen] = useState(false);
   if (calls.length === 0) return null;
@@ -177,6 +201,7 @@ export default function ToolActivity({ calls }: { calls: ToolCallRecord[] }) {
         </div>
       )}
       {calls.map(c => <WidgetRow key={`w-${c.id}`} call={c} />)}
+      {calls.map(c => <SavedRows key={`s-${c.id}`} call={c} />)}
       {/* One row per file, most recent action wins, so write+edit of one file shows once. */}
       {calls.filter((c, i) => { const p = filePath(c); return p && calls.findLastIndex(d => filePath(d) === p && d.state === 'done') === i; })
         .map(c => <FileRow key={`f-${c.id}`} call={c} />)}

@@ -4,17 +4,26 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import rehypeHighlight from 'rehype-highlight';
+import { defaultUrlTransform } from 'react-markdown';
+import { useWorkspacePanel } from '@/components/workspace/workspace-context';
 
 // Renders MODUS's chat text as real markdown: GFM tables, task-list
 // checkboxes, fenced code with syntax highlighting (rehype-highlight adds
 // hljs-* classes; colors come from the .chat-md pre code theme in globals.css).
 // Every element is themed to match the chat surface. Safe on streaming text —
 // react-markdown renders whatever parses so far.
+// workspace:path links point at a file in the chat's workspace. react-markdown
+// strips unknown schemes by default, so this one is let through explicitly and
+// every other URL keeps the default sanitizing.
+const urlTransform = (url: string) => (url.startsWith('workspace:') ? url : defaultUrlTransform(url));
+
 export default function MarkdownMessage({ children }: { children: string }) {
+  const ws = useWorkspacePanel();
   return (
     <div className="chat-md text-sm leading-relaxed text-text">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkBreaks]}
+        urlTransform={urlTransform}
         rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
         components={{
           p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
@@ -30,9 +39,17 @@ export default function MarkdownMessage({ children }: { children: string }) {
             (className ?? '').includes('task-list-item')
               ? <li className="flex items-start gap-2 leading-relaxed">{children}</li>
               : <li className="leading-relaxed">{children}</li>,
-          a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noopener noreferrer" className="text-brand underline underline-offset-2 hover:text-brand-light">{children}</a>
-          ),
+          a: ({ href, children }) => {
+            if (href?.startsWith('workspace:')) {
+              const path = decodeURIComponent(href.slice('workspace:'.length)).replace(/^\/+/, '');
+              // Outside a chat (or for guests) there is no panel to open; show plain text.
+              if (!ws?.workspaceId || !path) return <span className="font-medium text-text">{children}</span>;
+              return (
+                <button type="button" onClick={() => ws.openFile(path)} className="text-brand underline underline-offset-2 hover:text-brand-light">{children}</button>
+              );
+            }
+            return <a href={href} target="_blank" rel="noopener noreferrer" className="text-brand underline underline-offset-2 hover:text-brand-light">{children}</a>;
+          },
           strong: ({ children }) => <strong className="font-semibold text-text">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
           blockquote: ({ children }) => (

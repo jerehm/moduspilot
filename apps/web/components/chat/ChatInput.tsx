@@ -1,6 +1,7 @@
 'use client';
 
-import { useWorkspacePanel } from '@/components/workspace/WorkspacePanel';
+import { useWorkspacePanel } from '@/components/workspace/workspace-context';
+import { wsApi } from '@/lib/workspace-client';
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -192,10 +193,20 @@ export default function ChatInput({
     setRecording(true);
   }
 
+  // Keep the original file in the chat's workspace (uploads/), so it shows in
+  // Files and can be previewed later. The model still reads the extracted
+  // text; this never blocks or fails the attach.
+  function keepOriginal(file: File) {
+    const ws = workspacePanel?.workspaceId;
+    if (!ws) return;
+    void wsApi.upload(ws, file).then(() => workspacePanel?.refresh()).catch(() => {});
+  }
+
   function handleImageChange(e: ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    keepOriginal(file);
     const reader = new FileReader();
     reader.onload = () => {
       const result = reader.result as string;
@@ -240,6 +251,7 @@ export default function ChatInput({
         throw new Error('Unsupported file. Try a PDF, Word, Excel, text, or CSV file.');
       }
       onFileAttach(file.name, text);
+      keepOriginal(file);
     } catch (err) {
       setAttachError(err instanceof Error ? err.message : 'Could not read that file.');
       setTimeout(() => setAttachError(''), 4000);

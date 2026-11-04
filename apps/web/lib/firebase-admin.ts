@@ -20,7 +20,13 @@ function getAdminApp() {
  * `<projectId>.firebasestorage.app` rather than `<projectId>.appspot.com`).
  */
 export function adminBucket() {
-  const name = process.env.FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID}.appspot.com`;
+  // The client config already names the real bucket, so prefer it over the
+  // appspot.com guess, which does not exist on newer projects (local dev had
+  // only the NEXT_PUBLIC_ value and every Storage write failed with "bucket
+  // does not exist").
+  const name = process.env.FIREBASE_STORAGE_BUCKET
+    || process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    || `${process.env.FIREBASE_PROJECT_ID}.appspot.com`;
   return getStorage(getAdminApp()).bucket(name);
 }
 

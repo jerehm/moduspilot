@@ -33,6 +33,8 @@ export interface ToolCallRecord {
   media: ToolMedia[];
   /** MCP Apps widget for this call, opened in the side panel. */
   ui?: ToolUiRef;
+  /** Workspace paths this call's media was saved to (outputs/...). */
+  saved?: string[];
   /** Client only, never saved: the live args and full result for the widget. */
   raw?: { args?: unknown; result?: unknown };
 }

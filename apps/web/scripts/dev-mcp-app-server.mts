@@ -67,6 +67,17 @@ function build() {
     i = (i + 1) % COLORS.length;
     return { content: [{ type: 'text', text: 'recolored' }], structuredContent: { title: 'Recolored poster', color: COLORS[i] } };
   });
+  // A generation-style tool: one CDN link and one inline image, the two shapes
+  // real servers use. Checks the outputs/ copy (lib/chat/save-tool-media.ts).
+  s.registerTool('make_image', {
+    description: 'Generate a test image from a prompt.',
+    inputSchema: { prompt: z.string() },
+  }, async ({ prompt }) => ({
+    content: [
+      { type: 'text', text: `Image for "${prompt}" ready: https://moduspilot.com/og.png` },
+      { type: 'image', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==', mimeType: 'image/png' },
+    ],
+  }));
   s.registerResource('poster', URI, { mimeType: MIME }, async () => ({
     contents: [{ uri: URI, mimeType: MIME, text: WIDGET, _meta: { ui: { prefersBorder: true } } }],
   }));
