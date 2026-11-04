@@ -10,6 +10,7 @@ import { needsExplicitTemperature, maxTokensFor } from '@/lib/chat/model-params'
 import { effortProviderOptions, effortFor } from '@/lib/chat/effort';
 import { getMcpServers } from '@/lib/mcp-servers';
 import { connectMcpClient } from '@/lib/mcp-client';
+import { FirestoreMcpOAuthProvider } from '@/lib/mcp/oauth';
 import { sanitizeMcpToolSchemas, makeToolErrorsNonFatal } from '@/lib/mcp-schema';
 import { assertPublicUrl } from '@/lib/ssrf';
 import {
@@ -516,7 +517,11 @@ export async function POST(req: Request) {
 
     const mcpSetupPromise: Promise<void> = uid && !skipMcp ? (async () => {
       try {
-        const mcpServers = await getMcpServers(uid);
+        // OAuth connectors that are not signed in (or lost their grant) have
+        // nothing to offer this turn. Connecting them would only 401.
+        const mcpServers = (await getMcpServers(uid)).filter(
+          sv => sv.authType !== 'oauth' || sv.authStatus === 'connected',
+        );
         if (mcpServers.length === 0) return;
         // Reject a promise after `ms` without leaving the underlying work
         // uncancelled leaking. Used to bound both connect and tools() so a slow
@@ -537,7 +542,14 @@ export async function POST(req: Request) {
             // Re-check at connection time: a stored URL could resolve to an
             // internal address now (DNS rebinding) even if it was public when added.
             await assertPublicUrl(server.url);
-            const connectP = connectMcpClient({ url: server.url, authHeader: server.authHeader, transport: server.transport });
+            const connectP = connectMcpClient({
+              url: server.url,
+              authHeader: server.authHeader,
+              transport: server.transport,
+              authProvider: server.authType === 'oauth'
+                ? new FirestoreMcpOAuthProvider(uid, server.id, server.redirectUri ?? '', { interactive: false })
+                : undefined,
+            });
             let gaveUp = false;
             // If the socket opens AFTER we already timed out, close it so the
             // connection never leaks (the previous Promise.race dropped it).

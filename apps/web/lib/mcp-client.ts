@@ -1,5 +1,6 @@
 import { experimental_createMCPClient, type MCPTransport } from 'ai';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import type { OAuthClientProvider } from '@modelcontextprotocol/sdk/client/auth.js';
 import type { McpTransport } from './mcp-servers';
 
 // Builds the transport arg for `experimental_createMCPClient` for a plugin's
@@ -11,14 +12,17 @@ export function buildMcpTransport(opts: {
   url: string;
   authHeader?: string;
   transport: McpTransport;
+  /** OAuth connectors: the SDK attaches the bearer and refreshes it on 401. */
+  authProvider?: OAuthClientProvider;
 }) {
   const headers = opts.authHeader ? { Authorization: opts.authHeader } : undefined;
 
-  if (opts.transport === 'http') {
+  if (opts.transport === 'http' || opts.authProvider) {
     // The SDK transport's send() accepts a superset of AI SDK's message type;
     // the runtime contract (start/send/close/onmessage) matches, so cast.
     return new StreamableHTTPClientTransport(new URL(opts.url), {
       requestInit: headers ? { headers } : undefined,
+      authProvider: opts.authProvider,
     }) as unknown as MCPTransport;
   }
 
@@ -30,6 +34,7 @@ export function connectMcpClient(opts: {
   url: string;
   authHeader?: string;
   transport: McpTransport;
+  authProvider?: OAuthClientProvider;
 }) {
   return experimental_createMCPClient({ transport: buildMcpTransport(opts) });
 }

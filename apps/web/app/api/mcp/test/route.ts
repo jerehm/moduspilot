@@ -59,10 +59,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, tools: toolNames });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Connection failed';
+    // A server that answers 401 with a resource_metadata pointer signs in with
+    // OAuth. Say so, and the form offers the sign in instead of a dead end.
+    if (!authHeader && await wantsOAuth(url)) {
+      return NextResponse.json({ ok: false, needsOAuth: true, error: 'This server uses sign in. Connect with your account instead of a token.' }, { status: 200 });
+    }
     return NextResponse.json({ ok: false, error: msg }, { status: 200 });
   } finally {
     if (client) {
       try { await client.close(); } catch {}
     }
+  }
+}
+
+async function wantsOAuth(url: string): Promise<boolean> {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', accept: 'application/json, text/event-stream' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'MODUS', version: '1' } } }),
+      redirect: 'manual',
+      signal: AbortSignal.timeout(5000),
+    });
+    return res.status === 401 && /resource_metadata=/i.test(res.headers.get('www-authenticate') ?? '');
+  } catch {
+    return false;
   }
 }

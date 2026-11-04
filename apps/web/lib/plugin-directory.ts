@@ -12,16 +12,40 @@ export type PluginTemplate = {
   transport: McpTransport;
   url?: string;
   tokenless?: boolean;
+  /** Signs in with OAuth (discovery + dynamic registration). See lib/mcp/oauth.ts. */
+  oauth?: boolean;
   authLabel?: string;        // e.g. "GitHub token"
   authPlaceholder?: string;  // e.g. "Bearer ghp_…"
   docsUrl?: string;
 };
 
 export const PLUGIN_DIRECTORY: PluginTemplate[] = [
+  // OAuth connectors. Both verified 2026-11-03: 401 with a resource_metadata
+  // pointer, protected-resource metadata, and a registration_endpoint (DCR).
+  {
+    id: 'pika',
+    name: 'Pika',
+    description: 'Generate and edit images, video, music and voice from chat.',
+    category: 'Create',
+    transport: 'http',
+    url: 'https://mcp.pika.me/api/mcp',
+    oauth: true,
+    docsUrl: 'https://pika.me',
+  },
+  {
+    id: 'higgsfield',
+    name: 'Higgsfield',
+    description: 'Image and video generation with Higgsfield models.',
+    category: 'Create',
+    transport: 'http',
+    url: 'https://mcp.higgsfield.ai/mcp',
+    oauth: true,
+    docsUrl: 'https://higgsfield.ai',
+  },
   {
     id: 'deepwiki',
     name: 'DeepWiki',
-    description: 'Ask questions about any public GitHub repo — its code, architecture, and docs.',
+    description: 'Ask questions about any public GitHub repo: its code, architecture and docs.',
     category: 'Knowledge',
     transport: 'http',
     url: 'https://mcp.deepwiki.com/mcp',
@@ -31,7 +55,7 @@ export const PLUGIN_DIRECTORY: PluginTemplate[] = [
   {
     id: 'gitmcp',
     name: 'GitMCP',
-    description: 'Docs & code search assistant for popular open-source libraries.',
+    description: 'Docs and code search for popular open source libraries.',
     category: 'Knowledge',
     transport: 'http',
     url: 'https://gitmcp.io/docs',
@@ -41,7 +65,7 @@ export const PLUGIN_DIRECTORY: PluginTemplate[] = [
   {
     id: 'mslearn',
     name: 'Microsoft Learn',
-    description: 'Search official Microsoft, Azure, and .NET documentation.',
+    description: 'Search official Microsoft, Azure and .NET documentation.',
     category: 'Knowledge',
     transport: 'http',
     url: 'https://learn.microsoft.com/api/mcp',
@@ -51,7 +75,7 @@ export const PLUGIN_DIRECTORY: PluginTemplate[] = [
   {
     id: 'custom',
     name: 'Custom server',
-    description: 'Connect any MCP server — paste its endpoint and an optional token.',
+    description: 'Connect any MCP server. Paste its endpoint and an optional token.',
     category: 'Custom',
     transport: 'http',
     docsUrl: 'https://github.com/sylviangth/awesome-remote-mcp-servers',

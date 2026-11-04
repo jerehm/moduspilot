@@ -11,7 +11,10 @@ interface GoogleAccount { email: string; connectedAt: string | null; needsReconn
 interface NotionAccount { workspaceId: string; workspaceName: string; workspaceIcon: string | null; ownerEmail: string; connectedAt: string | null; }
 interface SlackAccount { teamId: string; teamName: string; connectedAt: string | null; }
 interface GitHubAccount { login: string; name: string | null; avatarUrl: string; connectedAt: string | null; }
-interface McpServerEntry { id: string; name: string; url: string; authHeader?: string; createdAt: string; }
+interface McpServerEntry { id: string; name: string; url: string; authHeader?: string; createdAt: string;
+  authType?: 'oauth' | 'header';
+  authStatus?: 'connected' | 'pending' | 'needs_reconnect';
+}
 interface DeviceItem { count?: number; permission: string | null; enabled: boolean; }
 interface DeviceStatus { contacts: DeviceItem; health: DeviceItem; photos: DeviceItem; }
 interface ContactEntry { id: string; name: string; email: string | null; phone: string | null; company: string | null; userCategory: string | null; }
@@ -166,7 +169,7 @@ export default function ConnectorsSettings({ user }: Props) {
   const [mcpTransport, setMcpTransport] = useState<'http' | 'sse'>('http');
   const [mcpTemplate, setMcpTemplate] = useState<PluginTemplate | null>(null);
   const [mcpTesting, setMcpTesting] = useState(false);
-  const [mcpTestResult, setMcpTestResult] = useState<{ ok: boolean; tools?: string[]; error?: string } | null>(null);
+  const [mcpTestResult, setMcpTestResult] = useState<{ ok: boolean; tools?: string[]; error?: string; needsOAuth?: boolean } | null>(null);
   const [mcpSaving, setMcpSaving] = useState(false);
   const [mcpAdding, setMcpAdding] = useState<string | null>(null); // directory entry being one-tap added
   const [mcpRemoving, setMcpRemoving] = useState<string | null>(null);
@@ -197,7 +200,7 @@ export default function ConnectorsSettings({ user }: Props) {
     const connected = params.get('connected');
     const err = params.get('error');
     if (err) {
-      const labels: Record<string, string> = { notion_denied: 'Notion auth cancelled.', notion_failed: 'Notion connection failed.', slack_denied: 'Slack auth cancelled.', slack_failed: 'Slack connection failed.', github_denied: 'GitHub auth cancelled.', github_failed: 'GitHub connection failed.' };
+      const labels: Record<string, string> = { notion_denied: 'Notion auth cancelled.', notion_failed: 'Notion connection failed.', slack_denied: 'Slack auth cancelled.', slack_failed: 'Slack connection failed.', github_denied: 'GitHub auth cancelled.', github_failed: 'GitHub connection failed.', mcp_denied: 'Sign in cancelled.', mcp_state: 'That sign in link expired. Try again.', mcp_missing: 'That plugin was removed before sign in finished.', mcp_failed: `${params.get('name') ?? 'The plugin'} sign in failed. Try again.` };
       setError(labels[err] ?? 'Connection failed.');
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -210,6 +213,11 @@ export default function ConnectorsSettings({ user }: Props) {
         setGithubAccounts(data.github ?? []);
         window.history.replaceState({}, '', window.location.pathname);
       });
+    }
+    if (connected && !['notion', 'slack', 'github'].includes(connected) && !connected.includes('@')) {
+      // An MCP connector finished OAuth; the list already shows it from the
+      // initial load, so just clear the query string.
+      window.history.replaceState({}, '', window.location.pathname);
     }
     if (connected && connected.includes('@')) {
       user.getIdToken().then(async token => {
@@ -364,8 +372,33 @@ export default function ConnectorsSettings({ user }: Props) {
     }
   }
 
+  // OAuth connectors: the server runs discovery and registration, then hands
+  // back the provider's consent page. Coming back lands on ?connected=<name>.
+  async function connectOAuth(t: { id?: string; name?: string; url?: string }) {
+    setMcpAdding(t.id ?? t.url ?? 'oauth');
+    setError('');
+    try {
+      const token = await user.getIdToken();
+      const res = await fetch('/api/mcp/oauth/start', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(t.id ? { directoryId: t.id } : { name: t.name, url: t.url }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Could not start sign in'); return; }
+      if (data.authUrl) { window.location.assign(data.authUrl); return; }
+      const list = await fetch('/api/mcp/list', { headers: { Authorization: `Bearer ${token}` } }).then(r => r.json());
+      setMcpServers(list.servers ?? []);
+    } catch {
+      setError('Could not start sign in');
+    } finally {
+      setMcpAdding(null);
+    }
+  }
+
   // Directory: tokenless entries add in one tap; others open the form prefilled.
   function chooseTemplate(t: PluginTemplate) {
+    if (t.oauth && t.url) { connectOAuth(t); return; }
     if (t.id === 'custom') {
       setMcpTemplate(null); setMcpName(''); setMcpUrl(''); setMcpAuth(''); setMcpTransport('http');
       setMcpTestResult(null); setMcpFormOpen(true);
@@ -410,6 +443,9 @@ export default function ConnectorsSettings({ user }: Props) {
     } catch { setError('Failed to remove server'); }
     finally { setMcpRemoving(null); }
   }
+
+  // A sign in that never finished is not an active plugin.
+  const activeMcpCount = mcpServers.filter(s => s.authType !== 'oauth' || s.authStatus === 'connected').length;
 
   // Filtered contacts list (memoised inline)
   const filteredContacts = contactsList.filter(c => {
@@ -763,10 +799,10 @@ export default function ConnectorsSettings({ user }: Props) {
             </div>
             {loading ? (
               <div className="w-12 h-3 rounded bg-border animate-pulse" />
-            ) : mcpServers.length > 0 ? (
+            ) : activeMcpCount > 0 ? (
               <span className="flex items-center gap-1.5 text-xs text-emerald-400 shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                {mcpServers.length} active
+                {activeMcpCount} active
               </span>
             ) : null}
           </div>
@@ -776,12 +812,14 @@ export default function ConnectorsSettings({ user }: Props) {
             <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-2">Add a plugin</p>
             <div className="grid sm:grid-cols-2 gap-2">
               {PLUGIN_DIRECTORY.map(t => {
-                const already = !!t.url && mcpServers.some(s => s.url === t.url);
+                const match = t.url ? mcpServers.find(s => s.url === t.url) : undefined;
+                const already = !!match && (!t.oauth || match.authStatus === 'connected');
                 return (
                   <div key={t.id} className="flex items-start gap-3 rounded-lg border border-border bg-bg/40 px-3 py-2.5">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
                         <p className="text-sm font-medium text-text truncate">{t.name}</p>
+                        {t.oauth && <span className="text-[9px] font-semibold uppercase tracking-wide text-muted bg-text/[0.06] rounded px-1 py-0.5 shrink-0">Sign in</span>}
                         {t.tokenless && <span className="text-[9px] font-semibold uppercase tracking-wide text-emerald-400 bg-emerald-500/10 rounded px-1 py-0.5 shrink-0">1-tap</span>}
                       </div>
                       <p className="text-[11px] text-muted leading-snug mt-0.5">{t.description}</p>
@@ -791,7 +829,7 @@ export default function ConnectorsSettings({ user }: Props) {
                       disabled={already || mcpAdding === t.id}
                       className="shrink-0 mt-0.5 text-xs font-medium text-brand hover:underline disabled:opacity-40 disabled:no-underline"
                     >
-                      {already ? 'Added' : mcpAdding === t.id ? 'Adding…' : t.id === 'custom' ? 'Add' : t.tokenless ? 'Add' : 'Use'}
+                      {already ? (t.oauth ? 'Connected' : 'Added') : mcpAdding === t.id ? (t.oauth ? 'Opening…' : 'Adding…') : t.oauth ? (match ? 'Finish sign in' : 'Connect') : t.id === 'custom' ? 'Add' : t.tokenless ? 'Add' : 'Use'}
                     </button>
                   </div>
                 );
@@ -817,6 +855,15 @@ export default function ConnectorsSettings({ user }: Props) {
                   <p className="text-xs font-medium text-text truncate">{server.name}</p>
                   <p className="text-[11px] text-muted font-mono truncate">{server.url}</p>
                 </div>
+                {server.authType === 'oauth' && server.authStatus !== 'connected' && (
+                  <button
+                    onClick={() => connectOAuth({ name: server.name, url: server.url })}
+                    disabled={!!mcpAdding}
+                    className="text-[11px] font-medium text-brand hover:underline disabled:opacity-40 shrink-0"
+                  >
+                    {server.authStatus === 'needs_reconnect' ? 'Reconnect' : 'Finish sign in'}
+                  </button>
+                )}
                 <button
                   onClick={() => removeMcpServer(server.id)}
                   disabled={mcpRemoving === server.id}
@@ -878,7 +925,16 @@ export default function ConnectorsSettings({ user }: Props) {
                         Connected, {mcpTestResult.tools?.length ?? 0} tool{(mcpTestResult.tools?.length ?? 0) !== 1 ? 's' : ''} found
                         {mcpTestResult.tools?.length ? `: ${mcpTestResult.tools.slice(0, 4).join(', ')}${mcpTestResult.tools.length > 4 ? ` +${mcpTestResult.tools.length - 4} more` : ''}` : ''}</>
                       ) : (
-                        <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 mt-0.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>{mcpTestResult.error}</>
+                        <><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5 shrink-0 mt-0.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span className="flex-1">{mcpTestResult.error}</span>
+                        {mcpTestResult.needsOAuth && (
+                          <button
+                            onClick={() => connectOAuth({ name: mcpName.trim() || new URL(mcpUrl.trim()).hostname, url: mcpUrl.trim() })}
+                            disabled={!!mcpAdding}
+                            className="shrink-0 font-medium text-brand hover:underline disabled:opacity-40"
+                          >
+                            Sign in
+                          </button>
+                        )}</>
                       )}
                     </div>
                   )}

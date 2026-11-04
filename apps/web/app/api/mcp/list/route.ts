@@ -7,6 +7,10 @@ export async function GET(req: NextRequest) {
   if (auth instanceof Response) return auth;
   const { uid } = auth;
 
-  const servers = await getMcpServers(uid);
+  // The stored header is a credential; the browser only needs to know one exists.
+  const servers = (await getMcpServers(uid)).map(({ authHeader, redirectUri: _r, ...rest }) => ({
+    ...rest,
+    hasAuthHeader: !!authHeader,
+  }));
   return NextResponse.json({ servers });
 }
