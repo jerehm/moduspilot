@@ -1,5 +1,6 @@
 'use client';
 
+import { useWorkspacePanel } from '@/components/workspace/WorkspacePanel';
 import { useState, useRef, useEffect, type FormEvent, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -72,6 +73,7 @@ export default function ChatInput({
   presets = [], activePresetIds, onTogglePreset,
   docked = true,
 }: Props) {
+  const workspacePanel = useWorkspacePanel();
   const [recording, setRecording] = useState(false);
   // Between stopping the recording and the transcript arriving the mic looked
   // idle for seconds, which reads as broken (11-03 audit round 3).
@@ -580,11 +582,22 @@ export default function ChatInput({
                   onToggle={onTogglePreset}
                 />
               )}
+              {workspacePanel?.workspaceId && (
+                <button
+                  type="button"
+                  onClick={() => workspacePanel.toggleFiles()}
+                  className="flex items-center gap-1.5 text-xs text-muted hover:text-text px-2.5 h-[26px] rounded-lg border border-border transition-colors"
+                  aria-label="Files"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="w-3.5 h-3.5"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                  Files
+                </button>
+              )}
             </div>
           ) : <span />}
           {/* Keyboard hint is desktop-only — no Enter/Shift key on mobile, and it
               overflowed the narrow composer row. */}
-          <p className="hidden sm:block text-muted text-xs shrink-0">Enter to send · Shift+Enter for new line</p>
+          <p className={`hidden ${workspacePanel?.isOpen ? '' : 'sm:block'} text-muted text-xs shrink-0`}>Enter to send · Shift+Enter for new line</p>
         </div>
       </div>
     </form>

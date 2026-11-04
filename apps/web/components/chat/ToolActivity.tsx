@@ -10,7 +10,7 @@ import {
   type ToolCallRecord,
   type ToolMedia,
 } from '@/lib/chat/tool-activity';
-import { useWidgetPanel } from '@/components/workspace/WidgetPanel';
+import { useWidgetPanel, useWorkspacePanel } from '@/components/workspace/WorkspacePanel';
 
 /**
  * The record of tool calls on one assistant turn. Live invocations win while
@@ -119,6 +119,41 @@ function WidgetRow({ call }: { call: ToolCallRecord }) {
   );
 }
 
+const FILE_WRITES = new Set(['write_file', 'edit_file']);
+const FILE_VERB: Record<string, string> = { write_file: 'Wrote', edit_file: 'Edited', read_file: 'Read', delete_file: 'Deleted' };
+
+/** The workspace path a Files tool call touched, from its args (live or saved). */
+function filePath(call: ToolCallRecord): string | null {
+  if (call.server !== 'Files') return null;
+  const args = call.raw?.args ?? (() => { try { return JSON.parse(call.args ?? 'null'); } catch { return null; } })();
+  const p = (args as { path?: unknown } | null)?.path;
+  return typeof p === 'string' && p ? p : null;
+}
+
+const autoOpenedFiles = new Set<string>();
+
+function FileRow({ call }: { call: ToolCallRecord }) {
+  const ws = useWorkspacePanel();
+  const path = filePath(call);
+  const live = call.state === 'done' && call.raw?.result !== undefined;
+  // A file the model just wrote opens beside the chat (desktop, once per call),
+  // and the tree refreshes after any file tool.
+  useEffect(() => {
+    if (!ws || !path || !live || autoOpenedFiles.has(call.id)) return;
+    autoOpenedFiles.add(call.id);
+    if (FILE_WRITES.has(call.tool) && window.matchMedia('(min-width: 768px)').matches) ws.openFile(path);
+    else ws.refresh();
+  }, [ws, path, live, call]);
+  if (!ws || !path || call.state !== 'done' || call.tool === 'delete_file') return null;
+  return (
+    <button type="button" onClick={() => ws.openFile(path)} className="flex items-center gap-2 text-xs text-muted hover:text-text transition-colors">
+      <span>{FILE_VERB[call.tool] ?? 'Opened'}</span>
+      <span className="text-text/80 font-mono">{path}</span>
+      <span aria-hidden>›</span>
+    </button>
+  );
+}
+
 export default function ToolActivity({ calls }: { calls: ToolCallRecord[] }) {
   const [open, setOpen] = useState(false);
   if (calls.length === 0) return null;
@@ -142,6 +177,9 @@ export default function ToolActivity({ calls }: { calls: ToolCallRecord[] }) {
         </div>
       )}
       {calls.map(c => <WidgetRow key={`w-${c.id}`} call={c} />)}
+      {/* One row per file, most recent action wins, so write+edit of one file shows once. */}
+      {calls.filter((c, i) => { const p = filePath(c); return p && calls.findLastIndex(d => filePath(d) === p && d.state === 'done') === i; })
+        .map(c => <FileRow key={`f-${c.id}`} call={c} />)}
       <MediaGrid media={media} />
     </div>
   );

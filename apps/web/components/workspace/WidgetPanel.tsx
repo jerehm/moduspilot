@@ -1,9 +1,9 @@
 'use client';
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AppBridge, PostMessageTransport } from '@modelcontextprotocol/ext-apps/app-bridge';
 import { auth } from '@/lib/firebase';
-import { humanTool, type ToolUiRef } from '@/lib/chat/tool-activity';
+import type { ToolUiRef } from '@/lib/chat/tool-activity';
 
 /**
  * The side panel that hosts MCP Apps widgets ("Widget from Higgsfield").
@@ -29,10 +29,6 @@ export interface WidgetTarget {
   result?: unknown;
 }
 
-interface Ctx { open: (t: WidgetTarget) => void }
-const WidgetPanelContext = createContext<Ctx | null>(null);
-export const WidgetPanelProvider = WidgetPanelContext.Provider;
-export function useWidgetPanel(): Ctx | null { return useContext(WidgetPanelContext); }
 
 async function api(body: Record<string, unknown>) {
   const token = await auth.currentUser?.getIdToken().catch(() => null);
@@ -74,7 +70,7 @@ function withCsp(html: string, csp: string): string {
   return tag + html;
 }
 
-function McpAppFrame({ target, onMessage }: { target: WidgetTarget; onMessage: (text: string) => void }) {
+export function McpAppFrame({ target, onMessage }: { target: WidgetTarget; onMessage: (text: string) => void }) {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const [srcDoc, setSrcDoc] = useState<string | null>(null);
   const [height, setHeight] = useState(420);
@@ -149,25 +145,5 @@ function McpAppFrame({ target, onMessage }: { target: WidgetTarget; onMessage: (
         style={{ height }}
       />
     </div>
-  );
-}
-
-export function WidgetSidePanel({ target, onClose, onMessage }: { target: WidgetTarget; onClose: () => void; onMessage: (text: string) => void }) {
-  return (
-    <aside
-      aria-label="Plugin widget"
-      className="fixed inset-0 z-40 bg-bg flex flex-col md:static md:inset-auto md:z-auto md:w-[min(46%,560px)] md:shrink-0 md:border-l md:border-border"
-    >
-      <div className="flex items-center gap-2 px-4 h-12 border-b border-border shrink-0">
-        <p className="text-sm text-text truncate flex-1">
-          <span className="text-muted">Widget from </span>{target.server ?? 'plugin'}
-          <span className="text-muted"> · {humanTool(target.tool)}</span>
-        </p>
-        <button onClick={onClose} className="text-muted hover:text-text text-sm px-2 py-1" aria-label="Close widget">Close</button>
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-4">
-        <McpAppFrame key={target.toolCallId} target={target} onMessage={onMessage} />
-      </div>
-    </aside>
   );
 }
