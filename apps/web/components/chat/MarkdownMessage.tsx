@@ -4,6 +4,12 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import rehypeHighlight from 'rehype-highlight';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
+import { isValidElement, useState, type ReactNode } from 'react';
+import dynamic from 'next/dynamic';
+import { normalizeMathDelimiters } from '@/lib/chat/math-delimiters';
 import { defaultUrlTransform } from 'react-markdown';
 import { useWorkspacePanel } from '@/components/workspace/workspace-context';
 
@@ -17,14 +23,54 @@ import { useWorkspacePanel } from '@/components/workspace/workspace-context';
 // every other URL keeps the default sanitizing.
 const urlTransform = (url: string) => (url.startsWith('workspace:') ? url : defaultUrlTransform(url));
 
+const MermaidBlock = dynamic(() => import('./MermaidBlock'), { ssr: false });
+
+/** Plain text of a rendered code element (highlight.js wraps tokens in spans). */
+function textOf(node: ReactNode): string {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join('');
+  if (isValidElement(node)) return textOf((node.props as { children?: ReactNode }).children);
+  return '';
+}
+
+function CodeBlock({ children }: { children: ReactNode }) {
+  const [copied, setCopied] = useState(false);
+  const code = Array.isArray(children) ? children[0] : children;
+  const className = isValidElement(code) ? String((code.props as { className?: string }).className ?? '') : '';
+  const lang = className.match(/language-([\w+-]+)/)?.[1];
+  const text = textOf(children).replace(/\n$/, '');
+  if (lang === 'mermaid') return <MermaidBlock source={text} />;
+  return (
+    <div className="my-2 rounded-lg border border-border bg-[#0d0d14] overflow-hidden">
+      <div className="flex items-center justify-between px-3 py-1 border-b border-white/10 text-[11px] text-white/50">
+        <span>{lang ?? 'code'}</span>
+        <button
+          type="button"
+          onClick={() => { navigator.clipboard?.writeText(text).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); }).catch(() => {}); }}
+          className="hover:text-white transition-colors"
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre className="overflow-x-auto p-3 text-[12.5px] leading-relaxed">{children}</pre>
+    </div>
+  );
+}
+
 export default function MarkdownMessage({ children }: { children: string }) {
   const ws = useWorkspacePanel();
   return (
     <div className="chat-md text-sm leading-relaxed text-text">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkBreaks]}
+        // singleDollarTextMath off: "$24/mo or $59" is a price here. Inline math
+        // uses $$x$$ on one line (normalizeMathDelimiters maps \(x\) to it).
+        remarkPlugins={[remarkGfm, remarkBreaks, [remarkMath, { singleDollarTextMath: false }]]}
         urlTransform={urlTransform}
-        rehypePlugins={[[rehypeHighlight, { detect: true, ignoreMissing: true }]]}
+        rehypePlugins={[
+          [rehypeKatex, { throwOnError: false, strict: 'ignore' }],
+          [rehypeHighlight, { detect: true, ignoreMissing: true, plainText: ['mermaid'] }],
+        ]}
         components={{
           p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
           h1: ({ children }) => <h1 className="text-base font-bold text-text mt-4 mb-2 first:mt-0">{children}</h1>,
@@ -67,9 +113,7 @@ export default function MarkdownMessage({ children }: { children: string }) {
               <code className="rounded surface-tint border border-tint px-1 py-0.5 text-[0.85em] font-mono text-brand-light">{children}</code>
             );
           },
-          pre: ({ children }) => (
-            <pre className="my-2 overflow-x-auto rounded-lg border border-border bg-[#0d0d14] p-3 text-[12.5px] leading-relaxed">{children}</pre>
-          ),
+          pre: ({ children }) => <CodeBlock>{children}</CodeBlock>,
           table: ({ children }) => (
             <div className="my-2 overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-left text-[13px] border-collapse">{children}</table>
@@ -90,7 +134,7 @@ export default function MarkdownMessage({ children }: { children: string }) {
             ) : null,
         }}
       >
-        {children}
+        {normalizeMathDelimiters(children)}
       </ReactMarkdown>
     </div>
   );
