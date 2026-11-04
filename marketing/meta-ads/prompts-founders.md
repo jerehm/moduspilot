@@ -20,9 +20,9 @@ Paste the Brand block from `README.md` under every prompt. Copy comes from `copy
 **Why:** the tab overload is the most common pain point. Works for broad audiences too.
 
 ## F5. Board meeting
-**Prompt:** Photorealistic photo of a small modern boardroom with an ivory wall. Four empty chairs at the table each have an elegant place card in black serif: "GPT", "Claude", "Gemini", "DeepSeek". At the head of the table is one empty chair with a place card reading "You". Soft window light, premium and calm. Elegant black serif text on the wall reading exactly: "Your new advisory board. $24 a month."
+**Prompt:** Photorealistic photo of a small modern boardroom with an ivory wall. Four empty chairs at the table each have an elegant place card in black serif: "GPT", "Claude", "Gemini", "DeepSeek". At the head of the table is one empty chair with a place card reading "You". Soft window light, premium and calm. Elegant black serif text on the wall reading exactly: "Your new advisory board. $28 a month."
 **Why:** positions MODUS as a team of advisors instead of a tool. Strong for founders.
 
 ## F6. Receipt stack
-**Prompt:** Overhead flat lay on ivory linen: three small paper receipts slightly fanned, each printed "AI subscription $20/mo", with one thick red marker line through all three. Next to them, one clean white card printed with "$24/mo" and "GPT + Claude + Gemini + DeepSeek" with the attached MODUS logo. Soft natural shadows, editorial product photography. Large black serif headline at the top reading exactly: "Stop paying three times."
+**Prompt:** Overhead flat lay on ivory linen: three small paper receipts slightly fanned, each printed "AI subscription $20/mo", with one thick red marker line through all three. Next to them, one clean white card printed with "$28/mo" and "GPT + Claude + Gemini + DeepSeek" with the attached MODUS logo. Soft natural shadows, editorial product photography. Large black serif headline at the top reading exactly: "Stop paying three times."
 **Why:** a direct money angle for people who already pay. VERIFY competitor prices first.

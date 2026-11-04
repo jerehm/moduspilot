@@ -3,7 +3,7 @@
 Paste the Brand block from `README.md` under every prompt. Copy comes from `copy.md` > Broad.
 
 ## B1. Four into one
-**Prompt:** Clean studio product photo on a warm ivory surface. Four matte rounded-square tiles in a row, each in a different muted color (charcoal, sand, slate blue, sage), each with one plain text label in black: "GPT", "Claude", "Gemini", "DeepSeek". Thin lines run from all four tiles into one larger white tile on the right that holds the attached MODUS logo. Soft daylight from the left, gentle shadows, lots of empty space at the top. Large bold black headline at the top reading exactly: "4 models. 1 platform." Small text at the bottom reading exactly: "MODUS. $24 a month."
+**Prompt:** Clean studio product photo on a warm ivory surface. Four matte rounded-square tiles in a row, each in a different muted color (charcoal, sand, slate blue, sage), each with one plain text label in black: "GPT", "Claude", "Gemini", "DeepSeek". Thin lines run from all four tiles into one larger white tile on the right that holds the attached MODUS logo. Soft daylight from the left, gentle shadows, lots of empty space at the top. Large bold black headline at the top reading exactly: "4 models. 1 platform." Small text at the bottom reading exactly: "MODUS. $28 a month."
 **Why:** the core idea in one glance. It's the control ad every other concept gets measured against.
 
 ## B2. Remote control
@@ -31,5 +31,5 @@ Paste the Brand block from `README.md` under every prompt. Copy comes from `copy
 **Why:** before/after is one of the most reliable static formats on Meta.
 
 ## B8. Price tag
-**Prompt:** Close-up photo of a minimal paper price tag hanging on a string against a warm ivory background. The tag reads in black type: "GPT + Claude + Gemini + DeepSeek" on the first line and "$24/mo" large on the second line, with the attached MODUS logo small at the bottom of the tag. Soft shadow, boutique retail feel. No other text.
+**Prompt:** Close-up photo of a minimal paper price tag hanging on a string against a warm ivory background. The tag reads in black type: "GPT + Claude + Gemini + DeepSeek" on the first line and "$28/mo" large on the second line, with the attached MODUS logo small at the bottom of the tag. Soft shadow, boutique retail feel. No other text.
 **Why:** the full offer on one tag. Good for retargeting people who already visited.

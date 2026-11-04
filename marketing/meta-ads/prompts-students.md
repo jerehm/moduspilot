@@ -16,7 +16,7 @@ Paste the Brand block from `README.md` under every prompt. Copy comes from `copy
 **Why:** shows the action (comparing) instead of describing it.
 
 ## S4. Ramen budget
-**Prompt:** Photorealistic photo of a student's small kitchen counter: a cup of instant ramen, a phone and a crumpled receipt listing three lines in plain type, "AI app $20", "AI app $20", "AI app $20", crossed out in red pen. Beside it a neat card reading "MODUS $24/mo" with the attached logo. Warm light, real and a little messy. Bold black text at the top reading exactly: "Why pay for three?"
+**Prompt:** Photorealistic photo of a student's small kitchen counter: a cup of instant ramen, a phone and a crumpled receipt listing three lines in plain type, "AI app $20", "AI app $20", "AI app $20", crossed out in red pen. Beside it a neat card reading "MODUS $28/mo" with the attached logo. Warm light, real and a little messy. Bold black text at the top reading exactly: "Why pay for three?"
 **Why:** students feel subscription costs. VERIFY competitor prices first (see README).
 
 ## S5. Group chat

@@ -20,5 +20,5 @@ Paste the Brand block from `README.md` under every prompt. Copy comes from `copy
 **Why:** a little funny and very scroll-stopping in a work context.
 
 ## O5. Desk minimal (retargeting)
-**Prompt:** Minimal still life: a closed laptop, a ceramic coffee cup and a small notebook on an ivory desk, a soft violet gradient wall behind it, lots of negative space. Premium, quiet, high-end tech brand photography. Large black text centered in the upper half reading exactly: "Every model, one software." Smaller text under it reading exactly: "GPT. Claude. Gemini. DeepSeek. $24."
+**Prompt:** Minimal still life: a closed laptop, a ceramic coffee cup and a small notebook on an ivory desk, a soft violet gradient wall behind it, lots of negative space. Premium, quiet, high-end tech brand photography. Large black text centered in the upper half reading exactly: "Every model, one software." Smaller text under it reading exactly: "GPT. Claude. Gemini. DeepSeek. $28."
 **Why:** a calm reminder for people who already visited the site. Use only in a retargeting ad set.

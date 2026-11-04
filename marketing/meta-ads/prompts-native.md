@@ -7,11 +7,11 @@ These are made to look like posts, not ads. Paste the Brand block from `README.m
 **Why:** meme formats get shared and commented on, which lowers cost per click.
 
 ## N2. Bracket
-**Prompt:** Clean sports-style tournament bracket graphic on ivory paper texture. First round: "GPT" vs "Claude" and "Gemini" vs "DeepSeek". The final box in the middle holds the attached MODUS logo with the text "Why pick one?". Bold black title at the top reading exactly: "AI bracket." Small text at the bottom reading exactly: "All four in one app. $24."
+**Prompt:** Clean sports-style tournament bracket graphic on ivory paper texture. First round: "GPT" vs "Claude" and "Gemini" vs "DeepSeek". The final box in the middle holds the attached MODUS logo with the text "Why pick one?". Bold black title at the top reading exactly: "AI bracket." Small text at the bottom reading exactly: "All four in one app. $28."
 **Why:** the format invites people to comment their pick, and comments boost reach.
 
 ## N3. Scoreboard
-**Prompt:** Photo of a retro stadium scoreboard at dusk with warm bulb lights. Left side reads "4 APPS" with a scrolling list "GPT CLAUDE GEMINI DEEPSEEK". Right side reads "1 APP" with the attached MODUS logo. Center clock reads "$24". Cinematic, slightly grainy. No other text.
+**Prompt:** Photo of a retro stadium scoreboard at dusk with warm bulb lights. Left side reads "4 APPS" with a scrolling list "GPT CLAUDE GEMINI DEEPSEEK". Right side reads "1 APP" with the attached MODUS logo. Center clock reads "$28". Cinematic, slightly grainy. No other text.
 **Why:** bold and different from every other AI ad in the feed.
 
 ## N4. Notes app
