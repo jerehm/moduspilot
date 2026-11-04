@@ -37,6 +37,8 @@ import { DraftOptionsCard } from '@/components/DraftOptionsCard';
 import { ImageCard } from '@/components/ImageCard';
 import { DocumentCard } from '@/components/DocumentCard';
 import { ChartCard } from '@/components/ChartCard';
+import { ToolActivity } from '@/components/ToolActivity';
+import { readToolAnnotations, type ToolCallRecord } from '@/lib/tool-activity';
 import { ProactiveReveal } from '@/components/ui/ProactiveReveal';
 import { ThinkingPulse } from '@/components/ui/ThinkingPulse';
 import { PulseAvatar } from '@/components/ui/PulseAvatar';
@@ -83,6 +85,9 @@ type UIMessage = Message & {
   routedAuto?: boolean;
   downgraded?: boolean;
   requestedModel?: string;
+  annotations?: unknown[];
+  /** Live tool calls while streaming; the saved annotation covers reloads. */
+  toolCalls?: ToolCallRecord[];
 };
 
 let msgCounter = 0;
@@ -210,7 +215,7 @@ export default function ChatScreen() {
         });
         if (!alive) return;
         abortRef.current?.abort();
-        setMessages(existing.map(m => ({ id: m.id || newId(), role: m.role, content: m.content })));
+        setMessages(existing.map(m => ({ id: m.id || newId(), role: m.role, content: m.content, annotations: m.annotations })));
         setProactiveKind(null);
         setConvId(convIdScoped);
         convIdRef.current = convIdScoped;
@@ -287,7 +292,7 @@ export default function ChatScreen() {
   // on the first exchange. Uses a ref for convId so concurrent saves share one doc.
   const persist = useCallback(async (msgs: UIMessage[]) => {
     if (!user || msgs.length === 0) return;
-    const stored = msgs.map(m => ({ id: m.id, role: m.role, content: m.content }));
+    const stored = msgs.map(m => ({ id: m.id, role: m.role, content: m.content, ...(m.annotations?.length ? { annotations: m.annotations } : {}) }));
     const title = deriveTitle(stored);
     try {
       let id = convIdRef.current;
@@ -323,7 +328,7 @@ export default function ChatScreen() {
     setScope(null);
     try {
       const { messages: stored, proactive } = await loadConversation(user.uid, id);
-      setMessages(stored.map(m => ({ id: m.id || newId(), role: m.role, content: m.content })));
+      setMessages(stored.map(m => ({ id: m.id || newId(), role: m.role, content: m.content, annotations: m.annotations })));
       setProactiveKind(proactive ?? null);
       setConvId(id);
       convIdRef.current = id;
@@ -445,6 +450,8 @@ export default function ChatScreen() {
     abortRef.current = controller;
 
     let acc = '';
+    const anns: Record<string, unknown>[] = [];
+    let toolCount = 0;
     try {
       const choice = modelChoiceRef.current;
       for await (const chunk of streamChat(history, {
@@ -456,6 +463,11 @@ export default function ChatScreen() {
         modelChoice: choice,
         webSearch: extra?.webSearch,
         attachments: files,
+        onTools: (calls) => {
+          toolCount = calls.length;
+          setMessages(prev => prev.map(m => (m.id === assistantId ? { ...m, toolCalls: calls } : m)));
+        },
+        onAnnotation: (a) => { anns.push(a); },
         onMeta: (meta) => {
           // Chip when Auto routed, the answer was downgraded, or the user picked a
           // specific model. Stay quiet for the plain free default (auto=0, no pick).
@@ -476,13 +488,16 @@ export default function ChatScreen() {
       }
       // Persist the completed exchange (creates the conversation on first send).
       const hasRichBlock = /```(approval|draft_options|image|document|chart)/.test(acc);
-      if (acc.trim() === '' && !hasRichBlock) {
+      if (acc.trim() === '' && !hasRichBlock && toolCount === 0) {
         // Finished OK but produced nothing (content filter, a reasoning model that spent
         // its whole token budget, a provider hiccup). Never leave a silent blank bubble.
         setMessages(prev => prev.filter(m => m.id !== assistantId));
         Alert.alert('Empty response', 'The model returned an empty response. Try again, or switch models below.');
       } else if (convIdRef.current === sendConvId) {
-        void persist([...priorMessages, userMsg, { id: assistantId, role: 'assistant', content: acc }]);
+        void persist([...priorMessages, userMsg, { id: assistantId, role: 'assistant', content: acc, annotations: anns }]);
+        // Keep the annotations on the in-memory message too: every later send
+        // re-persists the whole thread from this state.
+        setMessages(prev => prev.map(m => (m.id === assistantId ? { ...m, annotations: anns } : m)));
       }
     } catch (e: unknown) {
       const name = (e as Error)?.name;
@@ -844,6 +859,7 @@ function MessageBubble({
                 : `Answered by ${modelName(message.routedModel)}`}
           </Text>
         ) : null}
+        <ToolActivity calls={message.toolCalls ?? readToolAnnotations(message).calls} />
         {isEmpty ? (
           <View className="rounded-2xl rounded-bl-sm px-4 py-4 bg-surface border border-border self-start">
             <ThinkingPulse />

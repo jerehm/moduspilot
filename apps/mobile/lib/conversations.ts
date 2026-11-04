@@ -15,6 +15,10 @@ export interface StoredMessage {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  /** Server annotations (model chip, tool records). Web reads and writes the
+   *  same field, so dropping it here erased them whenever a chat was continued
+   *  on the phone. */
+  annotations?: unknown[];
 }
 
 /**
@@ -81,7 +85,9 @@ export async function saveMessages(
   title?: string,
 ): Promise<void> {
   const update: Record<string, unknown> = {
-    messages: messages.map(m => ({ id: m.id, role: m.role, content: m.content })),
+    messages: messages.map(m => (Array.isArray(m.annotations) && m.annotations.length
+      ? { id: m.id, role: m.role, content: m.content, annotations: m.annotations }
+      : { id: m.id, role: m.role, content: m.content })),
     updatedAt: serverTimestamp(),
   };
   if (title) update.title = title;

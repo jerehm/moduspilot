@@ -1,5 +1,6 @@
 import { streamText, experimental_createMCPClient, StreamData, convertToCoreMessages } from 'ai';
 import { summarizeSteps } from '@/lib/chat/tool-activity';
+import { withToolHeartbeat } from '@/lib/chat/tool-heartbeat';
 import type { CoreMessage } from 'ai';
 import { MODUS_SYSTEM_PROMPT, SCREEN_ASSIST_SYSTEM_PROMPT, looksLikePromptExtraction, PROMPT_EXTRACTION_REMINDER, PROJECT_CHAT_RULES } from '@/lib/claude';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
@@ -960,6 +961,10 @@ export async function POST(req: Request) {
     // data stream as a message annotation instead — the same channel the routing
     // chip already reads and useConversations already persists.
     const streamData = new StreamData();
+    // Tool loops: a generation run is start + a few status polls, which 5 steps
+    // could not finish. Paid plans get 10. Every step re-sends the prompt, and
+    // the usage estimate below scales by steps, so the plan ceilings still bind.
+    const toolMaxSteps = freeTier ? 5 : 10;
 
     // Tell the user when an answer used the web. Until now this was completely
     // invisible: results were injected with a "cite sources naturally"
@@ -993,7 +998,7 @@ export async function POST(req: Request) {
         onFallback: (from, to, err) => console.log(`[chat] failover: ${from}→${to} (${String(err).slice(0, 140)})`),
         silentBackup: silentStreamBackup(resolved.modelId),
         // Must match the maxSteps on streamText below. Only bites when tools are on.
-        maxSteps: 5,
+        maxSteps: toolMaxSteps,
         onServed: (id) => {
           servedModelId = id;
           if (id === resolved.modelId) return;
@@ -1033,7 +1038,9 @@ export async function POST(req: Request) {
     // a model "MCP TOOLS AVAILABLE" while sending it none invites it to promise
     // an action it has no way to perform.
     const toolsUsable = modelSupportsTools(resolved.modelId);
-    const activeMcpTools = toolsUsable ? mcpTools : {};
+    const activeMcpTools = toolsUsable
+      ? withToolHeartbeat(mcpTools, () => { if (!streamDataClosed) streamData.append({ modusHeartbeat: Date.now() }); })
+      : {};
     const activeMcpBlock = toolsUsable ? mcpBlock : '';
     if (!toolsUsable && Object.keys(mcpTools).length > 0) {
       console.log(`[chat] tools dropped: ${resolved.modelId} cannot take function tools — answering without them`);
@@ -1082,7 +1089,7 @@ export async function POST(req: Request) {
       // low or high. maxTokens stays the ceiling — see lib/chat/effort.ts for
       // why lowering it instead brings the blank bubbles back.
       ...(Object.keys(activeEffortOptions).length > 0 ? { providerOptions: activeEffortOptions } : {}),
-      ...(Object.keys(activeMcpTools).length > 0 ? { tools: activeMcpTools as Parameters<typeof streamText>[0]['tools'], maxSteps: 5 } : {}),
+      ...(Object.keys(activeMcpTools).length > 0 ? { tools: activeMcpTools as Parameters<typeof streamText>[0]['tools'], maxSteps: toolMaxSteps } : {}),
       onError: async ({ error }) => {
         // onFinish does NOT fire when the stream errors, so without this the MCP
         // sockets opened above would leak on every failed request. Also surfaces
@@ -1149,7 +1156,9 @@ export async function POST(req: Request) {
           const reported = usage?.totalTokens;
           const total = typeof reported === 'number' && Number.isFinite(reported) && reported > 0
             ? reported
-            : Math.ceil((promptCharsSent + (text?.length ?? 0)) / 4);
+            // Each step re-sent the whole prompt. Counting it once let a 10 step
+            // tool loop bill as one message.
+            : Math.ceil((promptCharsSent * Math.max(1, steps?.length ?? 1) + (text?.length ?? 0)) / 4);
           // Weighted by what the model actually costs — see lib/chat/model-cost.ts.
           if (total > 0) trackTokenUsage(uid, userData, total, resolved.modelId);
         }

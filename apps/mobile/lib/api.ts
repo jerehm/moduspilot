@@ -21,6 +21,8 @@ export async function getAuthHeader(): Promise<Record<string, string>> {
   return { Authorization: `Bearer ${token}` };
 }
 
+import { fromInvocation, type ToolCallRecord } from './tool-activity';
+
 export type Message = {
   role: 'user' | 'assistant' | 'system';
   content: string;
@@ -34,6 +36,10 @@ export type TaskContext = { id: string; title: string; description?: string; don
 export type ChatImage = { base64: string; mimeType: string };
 export type ChatOpts = {
   signal?: AbortSignal;
+  /** Live tool calls on this answer, re-sent whole on every change. */
+  onTools?: (calls: ToolCallRecord[]) => void;
+  /** Each message annotation the server sends (persisted with the answer). */
+  onAnnotation?: (annotation: Record<string, unknown>) => void;
   goalContext?: GoalContext;
   projectContext?: ProjectContext;
   taskContext?: TaskContext;
@@ -246,6 +252,12 @@ export async function* streamChat(
   const decoder = new TextDecoder();
   let buffer = '';
 
+  // Tool calls (9:) and results (a:) used to be dropped here, so a Pika run
+  // looked like a frozen reply. Same records as the web ToolActivity.
+  let toolServers: Record<string, string> = {};
+  const invocations = new Map<string, { toolCallId: string; toolName: string; args?: unknown; state: string; result?: unknown }>();
+  const emitTools = () => opts.onTools?.([...invocations.values()].map(inv => fromInvocation(inv, toolServers)));
+
   // Inactivity watchdog, same 45s as the web chat: a stream that goes quiet used
   // to spin until the server's 300s kill. Resets on every chunk.
   const STALL_MS = 45000;
@@ -284,6 +296,31 @@ export async function* streamChat(
         } catch {
           // malformed chunk — skip
         }
+      } else if (line.startsWith('8:')) {
+        try {
+          const anns = JSON.parse(line.slice(2)) as unknown[];
+          for (const a of Array.isArray(anns) ? anns : []) {
+            if (!a || typeof a !== 'object') continue;
+            const o = a as Record<string, unknown>;
+            if (o.modusToolServers && typeof o.modusToolServers === 'object') {
+              toolServers = o.modusToolServers as Record<string, string>;
+              emitTools();
+            }
+            opts.onAnnotation?.(o);
+          }
+        } catch {}
+      } else if (line.startsWith('9:')) {
+        try {
+          const c = JSON.parse(line.slice(2)) as { toolCallId: string; toolName: string; args?: unknown };
+          invocations.set(c.toolCallId, { ...c, state: 'call' });
+          emitTools();
+        } catch {}
+      } else if (line.startsWith('a:')) {
+        try {
+          const r = JSON.parse(line.slice(2)) as { toolCallId: string; result: unknown };
+          const prev = invocations.get(r.toolCallId);
+          if (prev) { invocations.set(r.toolCallId, { ...prev, state: 'result', result: r.result }); emitTools(); }
+        } catch {}
       } else if (line.startsWith('3:')) {
         // The server's stream error token (rate_limit_reached, chat_error...).
         // Ignoring it used to turn every mid-stream failure into "Empty response".

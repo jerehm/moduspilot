@@ -385,7 +385,7 @@ export default function ChatWindow({
     return () => clearTimeout(t);
   }, [usagePct]);
 
-  const { messages, input, handleInputChange, append, isLoading, setInput, setMessages, stop, reload } = useChat({
+  const { messages, input, handleInputChange, append, isLoading, setInput, setMessages, stop, reload, data: streamData } = useChat({
     api: '/api/chat',
     // Unthrottled, every token is a synchronous store update under React 19, and
     // the [messages] effects below each queue another. A fast burst of tokens
@@ -576,7 +576,9 @@ export default function ChatWindow({
       setChatError('The response stalled. Please try again, or switch models below.');
     }, STALL_MS);
     return () => clearTimeout(t);
-  }, [isLoading, messages, stop]);
+    // streamData: the server's tool heartbeat (lib/chat/tool-heartbeat.ts). A
+    // tool can run for minutes with no tokens; the beats are its sign of life.
+  }, [isLoading, messages, streamData, stop]);
 
   // Abort any in-flight stream when this window unmounts — the key={activeId}
   // remount (draft → real conversation id) unmounts the whole component, and
