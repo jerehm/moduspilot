@@ -1,0 +1,724 @@
+{
+  "ranAt": "2026-11-05T03:37:11.796Z",
+  "models": [
+    "claude-opus-5-5",
+    "gpt-6-astra",
+    "gemini-4-argon",
+    "meta/llama-4-maverick",
+    "deepseek/deepseek-v3.1"
+  ],
+  "results": [
+    {
+      "id": "price-anchor-annual",
+      "topic": "startups",
+      "question": "A $20/mo product wants to add annual billing. Is a 12-months-for-the-price-of-10 discount too generous, or not generous enough to change behaviour?",
+      "options": [
+        "Too generous",
+        "Not generous enough"
+      ],
+      "columns": [
+        {
+          "modelId": "claude-opus-5-5",
+          "modelName": "Claude Opus 5.5",
+          "provider": "Anthropic",
+          "ok": true,
+          "status": 200,
+          "served": "claude-opus-5-5",
+          "ms": 9516,
+          "text": "PICK: Not generous enough\n\nWHY: Two months free (~17% off) is the industry norm, not a giveaway, because annual prepay cuts churn and brings cash forward, which usually more than pays for the discount. If anything it sits at the low end of what moves fence-sitters, so you'd lean toward strengthening the offer (e.g., framing it as \"2 months free\" or testing ~20%) rather than shrinking it.",
+          "pick": "Not generous enough",
+          "why": "Two months free (~17% off) is the industry norm, not a giveaway, because annual prepay cuts churn and brings cash forward, which usually more than pays for the discount. If anything it sits at the low end of what moves fence-sitters, so you'd lean toward strengthening the offer (e.g., framing it as \"2 months free\" or testing ~20%) rather than shrinking it.",
+          "detail": ""
+        },
+        {
+          "modelId": "gpt-6-astra",
+          "modelName": "GPT-6 Astra",
+          "provider": "OpenAI",
+          "ok": true,
+          "status": 200,
+          "served": "gpt-6-astra",
+          "ms": 14243,
+          "text": "PICK: Too generous\nWHY: You’re giving up 16.7% of annual revenue even for customers who would prepay for less. Start with one month free, then offer two only if the additional annual conversions and retention gains justify the extra discount.",
+          "pick": "Too generous",
+          "why": "You’re giving up 16.7% of annual revenue even for customers who would prepay for less. Start with one month free, then offer two only if the additional annual conversions and retention gains justify the extra discount.",
+          "detail": ""
+        },
+        {
+          "modelId": "gemini-4-argon",
+          "modelName": "Gemini 4",
+          "provider": "Google",
+          "ok": true,
+          "status": 200,
+          "served": "gemini-4-argon",
+          "ms": 7385,
+          "text": "PICK: Not generous enough\nWHY: A 16.7% discount only saves the user $40 over a full year, which is rarely enough absolute dollar value to overcome the friction of paying $200 upfront instead of $20. To meaningfully shift behavior at low price points, annual plans usually require at least a 20% to 25% discount (e.g., $180/year or 3 months free) to create a compelling psychological anchor.",
+          "pick": "Not generous enough",
+          "why": "A 16.7% discount only saves the user $40 over a full year, which is rarely enough absolute dollar value to overcome the friction of paying $200 upfront instead of $20. To meaningfully shift behavior at low price points, annual plans usually require at least a 20% to 25% discount (e.g., $180/year or 3 months free) to create a compelling psychological anchor.",
+          "detail": ""
+        },
+        {
+          "modelId": "meta/llama-4-maverick",
+          "modelName": "Llama 4 Maverick",
+          "provider": "Meta",
+          "ok": true,
+          "status": 200,
+          "served": "meta/llama-4-maverick",
+          "ms": 3010,
+          "text": "PICK: Not generous enough\nWHY: A 16.67% discount may not be sufficient to incentivize customers to switch to annual billing, as it is relatively standard in the industry. More significant discounts, such as 20-25%, are often more effective at changing behavior.",
+          "pick": "Not generous enough",
+          "why": "A 16.67% discount may not be sufficient to incentivize customers to switch to annual billing, as it is relatively standard in the industry. More significant discounts, such as 20-25%, are often more effective at changing behavior.",
+          "detail": ""
+        },
+        {
+          "modelId": "deepseek/deepseek-v3.1",
+          "modelName": "DeepSeek V3.1",
+          "provider": "DeepSeek",
+          "ok": true,
+          "status": 200,
+          "served": "deepseek/deepseek-v3.1",
+          "ms": 5563,
+          "text": "PICK: Too generous\nWHY: A 20% discount is substantial and may unnecessarily reduce revenue when a smaller incentive could still drive annual conversions. Many businesses offer only 10-15% for annual billing, which is often sufficient to change behavior.",
+          "pick": "Too generous",
+          "why": "A 20% discount is substantial and may unnecessarily reduce revenue when a smaller incentive could still drive annual conversions. Many businesses offer only 10-15% for annual billing, which is often sufficient to change behavior.",
+          "detail": ""
+        }
+      ],
+      "split": {
+        "Not generous enough": [
+          "Claude Opus 5.5",
+          "Gemini 4",
+          "Llama 4 Maverick"
+        ],
+        "Too generous": [
+          "GPT-6 Astra",
+          "DeepSeek V3.1"
+        ]
+      },
+      "disagreement": 0.4,
+      "verdict": "Claude Opus 5.5 and Gemini 4 both provided similar insights, suggesting that the discount is not generous enough, which aligns with industry standards for encouraging annual billing. GPT-6 Astra, however, argued that the discount is too generous, which contrasts with the consensus and reflects a different perspective on revenue loss versus customer behavior."
+    },
+    {
+      "id": "hire-vs-contract",
+      "topic": "startups",
+      "question": "An agency owner at $30k/mo revenue is the bottleneck on delivery. Hire a full-time employee, or scale with contractors?",
+      "options": [
+        "Full-time hire",
+        "Contractors"
+      ],
+      "columns": [
+        {
+          "modelId": "claude-opus-5-5",
+          "modelName": "Claude Opus 5.5",
+          "provider": "Anthropic",
+          "ok": true,
+          "status": 200,
+          "served": "claude-opus-5-5",
+          "ms": 6461,
+          "text": "PICK: Full-time hire\nWHY: If the owner is the delivery bottleneck, contractors usually still need the owner to brief, manage, and QA their work, so the bottleneck stays in place. A full-time hire, such as a delivery lead or senior generalist, can absorb process knowledge, own client outcomes, and free the owner for sales, and $30k/mo can typically support that salary.",
+          "pick": "Full-time hire",
+          "why": "If the owner is the delivery bottleneck, contractors usually still need the owner to brief, manage, and QA their work, so the bottleneck stays in place. A full-time hire, such as a delivery lead or senior generalist, can absorb process knowledge, own client outcomes, and free the owner for sales, and $30k/mo can typically support that salary.",
+          "detail": ""
+        },
+        {
+          "modelId": "gpt-6-astra",
+          "modelName": "GPT-6 Astra",
+          "provider": "OpenAI",
+          "ok": true,
+          "status": 200,
+          "served": "gpt-6-astra",
+          "ms": 6923,
+          "text": "PICK: Contractors\nWHY: At $30k/mo, contractors let you add delivery capacity without committing to full-time payroll before margins and workload justify it. Give an experienced contractor ownership of a clearly scoped delivery function—not just tasks—or you’ll remain the bottleneck.",
+          "pick": "Contractors",
+          "why": "At $30k/mo, contractors let you add delivery capacity without committing to full-time payroll before margins and workload justify it. Give an experienced contractor ownership of a clearly scoped delivery function—not just tasks—or you’ll remain the bottleneck.",
+          "detail": ""
+        },
+        {
+          "modelId": "gemini-4-argon",
+          "modelName": "Gemini 4",
+          "provider": "Google",
+          "ok": true,
+          "status": 200,
+          "served": "gemini-4-argon",
+          "ms": 7732,
+          "text": "PICK: Contractors\nWHY: At $30k/mo, your revenue is still vulnerable to client churn, so locking in fixed payroll overhead is too risky. Contractors immediately free up your time to sell while keeping your costs variable until you reach a safer $50k/mo+ baseline.",
+          "pick": "Contractors",
+          "why": "At $30k/mo, your revenue is still vulnerable to client churn, so locking in fixed payroll overhead is too risky. Contractors immediately free up your time to sell while keeping your costs variable until you reach a safer $50k/mo+ baseline.",
+          "detail": ""
+        },
+        {
+          "modelId": "meta/llama-4-maverick",
+          "modelName": "Llama 4 Maverick",
+          "provider": "Meta",
+          "ok": true,
+          "status": 200,
+          "served": "meta/llama-4-maverick",
+          "ms": 2429,
+          "text": "PICK: Contractors\nWHY: Contractors provide the flexibility to scale up or down as needed, allowing the agency to adapt to fluctuating demand without the long-term commitment of a full-time employee. This flexibility is crucial when the bottleneck is on delivery and revenue is already at $30k/mo.",
+          "pick": "Contractors",
+          "why": "Contractors provide the flexibility to scale up or down as needed, allowing the agency to adapt to fluctuating demand without the long-term commitment of a full-time employee. This flexibility is crucial when the bottleneck is on delivery and revenue is already at $30k/mo.",
+          "detail": ""
+        },
+        {
+          "modelId": "deepseek/deepseek-v3.1",
+          "modelName": "DeepSeek V3.1",
+          "provider": "DeepSeek",
+          "ok": true,
+          "status": 200,
+          "served": "deepseek/deepseek-v3.1",
+          "ms": 3781,
+          "text": "PICK: Full-time hire\nWHY: A full-time hire provides consistent availability and deeper integration into your processes, reducing the bottleneck more effectively than managing multiple contractors. This ensures reliable delivery as you scale.",
+          "pick": "Full-time hire",
+          "why": "A full-time hire provides consistent availability and deeper integration into your processes, reducing the bottleneck more effectively than managing multiple contractors. This ensures reliable delivery as you scale.",
+          "detail": ""
+        }
+      ],
+      "split": {
+        "Full-time hire": [
+          "Claude Opus 5.5",
+          "DeepSeek V3.1"
+        ],
+        "Contractors": [
+          "GPT-6 Astra",
+          "Gemini 4",
+          "Llama 4 Maverick"
+        ]
+      },
+      "disagreement": 0.4,
+      "verdict": "Claude Opus 5.5 served the user best by addressing the core issue of the owner being the bottleneck and recommending a full-time hire that can alleviate that problem effectively. The other models suggested contractors, which may not resolve the bottleneck in delivery as they still require the owner's involvement, highlighting a meaningful difference in their approach to the owner's role in the business."
+    },
+    {
+      "id": "server-components-default",
+      "topic": "engineering",
+      "question": "For a new Next.js App Router product with heavy interactivity, should most components default to Server Components, or is a mostly-client architecture more honest about the app's needs?",
+      "options": [
+        "Server Components by default",
+        "Mostly client"
+      ],
+      "columns": [
+        {
+          "modelId": "claude-opus-5-5",
+          "modelName": "Claude Opus 5.5",
+          "provider": "Anthropic",
+          "ok": true,
+          "status": 200,
+          "served": "claude-opus-5-5",
+          "ms": 2515,
+          "text": "PICK: Server Components by default\nWHY: Even highly interactive apps have large static or data-fetching shells (layouts, data loading, auth gates). Keeping those on the server while pushing \"use client\" down to interactive leaves cuts bundle size and keeps data access simple without limiting interactivity.",
+          "pick": "Server Components by default",
+          "why": "Even highly interactive apps have large static or data-fetching shells (layouts, data loading, auth gates). Keeping those on the server while pushing \"use client\" down to interactive leaves cuts bundle size and keeps data access simple without limiting interactivity.",
+          "detail": ""
+        },
+        {
+          "modelId": "gpt-6-astra",
+          "modelName": "GPT-6 Astra",
+          "provider": "OpenAI",
+          "ok": true,
+          "status": 200,
+          "served": "gpt-6-astra",
+          "ms": 6945,
+          "text": "PICK: Server Components by default\nWHY: Heavy interactivity warrants substantial Client Component subtrees, not making every component client-side. Keep layouts and server-side data access in Server Components, and use client boundaries wherever state, effects, or browser APIs are needed.",
+          "pick": "Server Components by default",
+          "why": "Heavy interactivity warrants substantial Client Component subtrees, not making every component client-side. Keep layouts and server-side data access in Server Components, and use client boundaries wherever state, effects, or browser APIs are needed.",
+          "detail": ""
+        },
+        {
+          "modelId": "gemini-4-argon",
+          "modelName": "Gemini 4",
+          "provider": "Google",
+          "ok": true,
+          "status": 200,
+          "served": "gemini-4-argon",
+          "ms": 4718,
+          "text": "PICK: Server Components by default\nWHY: Even in heavily interactive applications, defaulting to Server Components for layouts, routing, and initial data fetching minimizes client bundle sizes and simplifies data access. You can then deliberately push `\"use client\"` boundaries down to the specific interactive leaf nodes or feature subtrees, getting the best of both worlds without fighting the App Router's design.",
+          "pick": "Server Components by default",
+          "why": "Even in heavily interactive applications, defaulting to Server Components for layouts, routing, and initial data fetching minimizes client bundle sizes and simplifies data access. You can then deliberately push `\"use client\"` boundaries down to the specific interactive leaf nodes or feature subtrees, getting the best of both worlds without fighting the App Router's design.",
+          "detail": ""
+        },
+        {
+          "modelId": "meta/llama-4-maverick",
+          "modelName": "Llama 4 Maverick",
+          "provider": "Meta",
+          "ok": true,
+          "status": 200,
+          "served": "meta/llama-4-maverick",
+          "ms": 1126,
+          "text": "PICK: Mostly client\nWHY: A heavily interactive application likely requires a significant amount of client-side JavaScript to handle user interactions, making a mostly-client architecture more suitable. Defaulting to Server Components might lead to unnecessary complexity with client-side interactivity.",
+          "pick": "Mostly client",
+          "why": "A heavily interactive application likely requires a significant amount of client-side JavaScript to handle user interactions, making a mostly-client architecture more suitable. Defaulting to Server Components might lead to unnecessary complexity with client-side interactivity.",
+          "detail": ""
+        },
+        {
+          "modelId": "deepseek/deepseek-v3.1",
+          "modelName": "DeepSeek V3.1",
+          "provider": "DeepSeek",
+          "ok": true,
+          "status": 200,
+          "served": "deepseek/deepseek-v3.1",
+          "ms": 2503,
+          "text": "PICK: Server Components by default\nWHY: Server Components reduce client-side JavaScript and improve initial load performance, while still allowing strategic use of Client Components for interactivity where needed.",
+          "pick": "Server Components by default",
+          "why": "Server Components reduce client-side JavaScript and improve initial load performance, while still allowing strategic use of Client Components for interactivity where needed.",
+          "detail": ""
+        }
+      ],
+      "split": {
+        "Server Components by default": [
+          "Claude Opus 5.5",
+          "GPT-6 Astra",
+          "Gemini 4",
+          "DeepSeek V3.1"
+        ],
+        "Mostly client": [
+          "Llama 4 Maverick"
+        ]
+      },
+      "disagreement": 0.2,
+      "verdict": null
+    },
+    {
+      "id": "ai-code-review",
+      "topic": "ai",
+      "question": "Should an AI code reviewer be allowed to block a pull request from merging, or should it only ever leave advisory comments?",
+      "options": [
+        "Allowed to block",
+        "Advisory only"
+      ],
+      "columns": [
+        {
+          "modelId": "claude-opus-5-5",
+          "modelName": "Claude Opus 5.5",
+          "provider": "Anthropic",
+          "ok": true,
+          "status": 200,
+          "served": "claude-opus-5-5",
+          "ms": 4599,
+          "text": "PICK: Advisory only\nWHY: AI reviewers still produce enough false positives and non-deterministic judgments that hard-blocking would erode trust and train developers to game or bypass the tool. Merge gates should rest on deterministic checks (tests, linters, security scanners) and accountable human approvers, with AI comments informing those humans rather than overruling them.",
+          "pick": "Advisory only",
+          "why": "AI reviewers still produce enough false positives and non-deterministic judgments that hard-blocking would erode trust and train developers to game or bypass the tool. Merge gates should rest on deterministic checks (tests, linters, security scanners) and accountable human approvers, with AI comments informing those humans rather than overruling them.",
+          "detail": ""
+        },
+        {
+          "modelId": "gpt-6-astra",
+          "modelName": "GPT-6 Astra",
+          "provider": "OpenAI",
+          "ok": true,
+          "status": 200,
+          "served": "gpt-6-astra",
+          "ms": 6806,
+          "text": "PICK: Allowed to block\nWHY: Blocking can prevent serious security or correctness defects before they reach production. That authority should be limited by human-defined criteria, supported by verifiable evidence, and subject to human override.",
+          "pick": "Allowed to block",
+          "why": "Blocking can prevent serious security or correctness defects before they reach production. That authority should be limited by human-defined criteria, supported by verifiable evidence, and subject to human override.",
+          "detail": ""
+        },
+        {
+          "modelId": "gemini-4-argon",
+          "modelName": "Gemini 4",
+          "provider": "Google",
+          "ok": true,
+          "status": 200,
+          "served": "gemini-4-argon",
+          "ms": 3568,
+          "text": "PICK: Advisory only\nWHY: AI models frequently hallucinate and lack full architectural context, meaning blocking capabilities would introduce unacceptable friction and bottleneck deployments due to false positives. Deterministic checks like compilers, linters, and test suites should handle automated blocking, while final merge authority must remain with accountable human engineers.",
+          "pick": "Advisory only",
+          "why": "AI models frequently hallucinate and lack full architectural context, meaning blocking capabilities would introduce unacceptable friction and bottleneck deployments due to false positives. Deterministic checks like compilers, linters, and test suites should handle automated blocking, while final merge authority must remain with accountable human engineers.",
+          "detail": ""
+        },
+        {
+          "modelId": "meta/llama-4-maverick",
+          "modelName": "Llama 4 Maverick",
+          "provider": "Meta",
+          "ok": true,
+          "status": 200,
+          "served": "meta/llama-4-maverick",
+          "ms": 1288,
+          "text": "PICK: Advisory only\nWHY: An AI code reviewer should not have the final say in blocking a pull request as it may not fully understand the context or nuances of the code change, and human judgment is still essential for critical decisions. Allowing AI to block merges could lead to unnecessary delays or incorrect rejections.",
+          "pick": "Advisory only",
+          "why": "An AI code reviewer should not have the final say in blocking a pull request as it may not fully understand the context or nuances of the code change, and human judgment is still essential for critical decisions. Allowing AI to block merges could lead to unnecessary delays or incorrect rejections.",
+          "detail": ""
+        },
+        {
+          "modelId": "deepseek/deepseek-v3.1",
+          "modelName": "DeepSeek V3.1",
+          "provider": "DeepSeek",
+          "ok": true,
+          "status": 200,
+          "served": "deepseek/deepseek-v3.1",
+          "ms": 6041,
+          "text": "PICK: Advisory only\nWHY: An AI code reviewer should provide recommendations and highlight potential issues, but final approval and responsibility should remain with human developers to ensure context, intent, and nuanced judgment are properly considered.",
+          "pick": "Advisory only",
+          "why": "An AI code reviewer should provide recommendations and highlight potential issues, but final approval and responsibility should remain with human developers to ensure context, intent, and nuanced judgment are properly considered.",
+          "detail": ""
+        }
+      ],
+      "split": {
+        "Advisory only": [
+          "Claude Opus 5.5",
+          "Gemini 4",
+          "Llama 4 Maverick",
+          "DeepSeek V3.1"
+        ],
+        "Allowed to block": [
+          "GPT-6 Astra"
+        ]
+      },
+      "disagreement": 0.2,
+      "verdict": "Claude Opus 5.5 and Gemini 4 both provided a strong argument for AI reviewers being advisory only, emphasizing the risks of false positives and the importance of human oversight, making their answers more aligned and effective for the user's question. In contrast, GPT-6 Astra advocated for allowing AI to block merges, which introduces a different perspective but lacks the consensus on the risks highlighted by the other two models."
+    },
+    {
+      "id": "one-model-vs-many",
+      "topic": "ai",
+      "question": "For daily professional work, is it better to master one frontier model deeply, or to route each task to whichever model is strongest at it?",
+      "options": [
+        "Master one",
+        "Route per task"
+      ],
+      "columns": [
+        {
+          "modelId": "claude-opus-5-5",
+          "modelName": "Claude Opus 5.5",
+          "provider": "Anthropic",
+          "ok": true,
+          "status": 200,
+          "served": "claude-opus-5-5",
+          "ms": 2696,
+          "text": "PICK: Master one\nWHY: Frontier models now differ only marginally on most professional tasks, while knowing one model's quirks, failure modes, and prompting style deeply compounds into far more reliable output and saved time. Routing adds overhead and context-switching costs that usually outweigh small per-task gains, so keep a second model only for the rare task where your main one clearly falls short.",
+          "pick": "Master one",
+          "why": "Frontier models now differ only marginally on most professional tasks, while knowing one model's quirks, failure modes, and prompting style deeply compounds into far more reliable output and saved time. Routing adds overhead and context-switching costs that usually outweigh small per-task gains, so keep a second model only for the rare task where your main one clearly falls short.",
+          "detail": ""
+        },
+        {
+          "modelId": "gpt-6-astra",
+          "modelName": "GPT-6 Astra",
+          "provider": "OpenAI",
+          "ok": true,
+          "status": 200,
+          "served": "gpt-6-astra",
+          "ms": 4581,
+          "text": "PICK: Master one\nWHY: For daily professional work, learning one model’s strengths, failure modes, and workflows usually pays off more than chasing marginal gains across models. Consistent context and less switching overhead make good results easier to reproduce.",
+          "pick": "Master one",
+          "why": "For daily professional work, learning one model’s strengths, failure modes, and workflows usually pays off more than chasing marginal gains across models. Consistent context and less switching overhead make good results easier to reproduce.",
+          "detail": ""
+        },
+        {
+          "modelId": "gemini-4-argon",
+          "modelName": "Gemini 4",
+          "provider": "Google",
+          "ok": true,
+          "status": 200,
+          "served": "gemini-4-argon",
+          "ms": 3507,
+          "text": "PICK: Master one\nWHY: Deeply understanding one frontier model's quirks, context handling, and prompting patterns yields faster, more consistent results than constantly context-switching between tools. Modern frontier models have converged enough in capability that the workflow friction of routing tasks outweighs the marginal gains of model-hopping for daily work.",
+          "pick": "Master one",
+          "why": "Deeply understanding one frontier model's quirks, context handling, and prompting patterns yields faster, more consistent results than constantly context-switching between tools. Modern frontier models have converged enough in capability that the workflow friction of routing tasks outweighs the marginal gains of model-hopping for daily work.",
+          "detail": ""
+        },
+        {
+          "modelId": "meta/llama-4-maverick",
+          "modelName": "Llama 4 Maverick",
+          "provider": "Meta",
+          "ok": true,
+          "status": 200,
+          "served": "meta/llama-4-maverick",
+          "ms": 1137,
+          "text": "PICK: Route per task\nWHY: Mastering multiple models allows leveraging their respective strengths, and routing tasks accordingly can lead to better overall performance. This approach also encourages staying up-to-date with the latest advancements in various models.",
+          "pick": "Route per task",
+          "why": "Mastering multiple models allows leveraging their respective strengths, and routing tasks accordingly can lead to better overall performance. This approach also encourages staying up-to-date with the latest advancements in various models.",
+          "detail": ""
+        },
+        {
+          "modelId": "deepseek/deepseek-v3.1",
+          "modelName": "DeepSeek V3.1",
+          "provider": "DeepSeek",
+          "ok": true,
+          "status": 200,
+          "served": "deepseek/deepseek-v3.1",
+          "ms": 3559,
+          "text": "PICK: Route per task\nWHY: Different models have specialized strengths, so routing tasks to the best-suited model maximizes efficiency and quality. This approach leverages the full ecosystem of AI capabilities rather than relying on a single model's limitations.",
+          "pick": "Route per task",
+          "why": "Different models have specialized strengths, so routing tasks to the best-suited model maximizes efficiency and quality. This approach leverages the full ecosystem of AI capabilities rather than relying on a single model's limitations.",
+          "detail": ""
+        }
+      ],
+      "split": {
+        "Master one": [
+          "Claude Opus 5.5",
+          "GPT-6 Astra",
+          "Gemini 4"
+        ],
+        "Route per task": [
+          "Llama 4 Maverick",
+          "DeepSeek V3.1"
+        ]
+      },
+      "disagreement": 0.4,
+      "verdict": null
+    },
+    {
+      "id": "rag-vs-long-context",
+      "topic": "ai",
+      "question": "You need a model to answer questions over a 500-page internal handbook that changes monthly. Build RAG, or just stuff it into a long context window?",
+      "options": [
+        "Build RAG",
+        "Long context"
+      ],
+      "columns": [
+        {
+          "modelId": "claude-opus-5-5",
+          "modelName": "Claude Opus 5.5",
+          "provider": "Anthropic",
+          "ok": true,
+          "status": 200,
+          "served": "claude-opus-5-5",
+          "ms": 4355,
+          "text": "PICK: Build RAG\nWHY: A 500-page handbook runs roughly 250–400k tokens, so sending all of it with every query is slow and expensive, and accuracy tends to drop when the answer is buried in the middle. Re-indexing once a month is cheap, and retrieval lets you cite the exact section behind each answer.",
+          "pick": "Build RAG",
+          "why": "A 500-page handbook runs roughly 250–400k tokens, so sending all of it with every query is slow and expensive, and accuracy tends to drop when the answer is buried in the middle. Re-indexing once a month is cheap, and retrieval lets you cite the exact section behind each answer.",
+          "detail": ""
+        },
+        {
+          "modelId": "gpt-6-astra",
+          "modelName": "GPT-6 Astra",
+          "provider": "OpenAI",
+          "ok": true,
+          "status": 200,
+          "served": "gpt-6-astra",
+          "ms": 4892,
+          "text": "PICK: Build RAG\nWHY: Retrieving relevant passages avoids repeatedly processing a 500-page handbook, reducing per-query cost and latency. Monthly updates can be indexed with version metadata, keeping answers grounded in current material with traceable citations.",
+          "pick": "Build RAG",
+          "why": "Retrieving relevant passages avoids repeatedly processing a 500-page handbook, reducing per-query cost and latency. Monthly updates can be indexed with version metadata, keeping answers grounded in current material with traceable citations.",
+          "detail": ""
+        },
+        {
+          "modelId": "gemini-4-argon",
+          "modelName": "Gemini 4",
+          "provider": "Google",
+          "ok": true,
+          "status": 200,
+          "served": "gemini-4-argon",
+          "ms": 4258,
+          "text": "PICK: Long context\nWHY: A 500-page handbook easily fits into modern context windows (~250k tokens), and with prompt caching, you eliminate the engineering overhead of building and maintaining a RAG pipeline. Updating the system monthly is as simple as swapping the source document in the cached prompt rather than re-chunking and re-indexing a vector database.",
+          "pick": "Long context",
+          "why": "A 500-page handbook easily fits into modern context windows (~250k tokens), and with prompt caching, you eliminate the engineering overhead of building and maintaining a RAG pipeline. Updating the system monthly is as simple as swapping the source document in the cached prompt rather than re-chunking and re-indexing a vector database.",
+          "detail": ""
+        },
+        {
+          "modelId": "meta/llama-4-maverick",
+          "modelName": "Llama 4 Maverick",
+          "provider": "Meta",
+          "ok": true,
+          "status": 200,
+          "served": "meta/llama-4-maverick",
+          "ms": 1187,
+          "text": "PICK: Build RAG\nWHY: Handling a 500-page document that changes monthly would be more feasible and efficient with a Retrieval-Augmented Generator (RAG) that can dynamically retrieve and incorporate the most recent information, rather than relying on a long context window that may struggle with such a large and frequently updated document.",
+          "pick": "Build RAG",
+          "why": "Handling a 500-page document that changes monthly would be more feasible and efficient with a Retrieval-Augmented Generator (RAG) that can dynamically retrieve and incorporate the most recent information, rather than relying on a long context window that may struggle with such a large and frequently updated document.",
+          "detail": ""
+        },
+        {
+          "modelId": "deepseek/deepseek-v3.1",
+          "modelName": "DeepSeek V3.1",
+          "provider": "DeepSeek",
+          "ok": true,
+          "status": 200,
+          "served": "deepseek/deepseek-v3.1",
+          "ms": 4122,
+          "text": "PICK: Build RAG\nWHY: The handbook changes monthly, making RAG more efficient for frequent updates and reducing costs compared to repeatedly processing a large context. RAG also provides better accuracy by retrieving only relevant sections.",
+          "pick": "Build RAG",
+          "why": "The handbook changes monthly, making RAG more efficient for frequent updates and reducing costs compared to repeatedly processing a large context. RAG also provides better accuracy by retrieving only relevant sections.",
+          "detail": ""
+        }
+      ],
+      "split": {
+        "Build RAG": [
+          "Claude Opus 5.5",
+          "GPT-6 Astra",
+          "Llama 4 Maverick",
+          "DeepSeek V3.1"
+        ],
+        "Long context": [
+          "Gemini 4"
+        ]
+      },
+      "disagreement": 0.2,
+      "verdict": "Claude Opus 5.5 and GPT-6 Astra both served the user best by advocating for a RAG approach, emphasizing efficiency and accuracy in handling a frequently updated large document. In contrast, Gemini 4 suggested using a long context window, which overlooks the potential challenges of processing and updating such a large document effectively."
+    },
+    {
+      "id": "fire-fast-underperformer",
+      "topic": "startups",
+      "question": "A six-person startup has an engineer who is well-liked, works hard, and ships noticeably slower than everyone else after nine months. Let them go now, or invest another quarter in coaching?",
+      "options": [
+        "Let them go now",
+        "Coach another quarter"
+      ],
+      "columns": [
+        {
+          "modelId": "claude-opus-5-5",
+          "modelName": "Claude Opus 5.5",
+          "provider": "Anthropic",
+          "ok": true,
+          "status": 200,
+          "served": "claude-opus-5-5",
+          "ms": 5778,
+          "text": "PICK: Let them go now\nWHY: In a six-person startup, each engineer is roughly a sixth of your capacity. Nine months is enough time to see whether someone fits the pace, and strong effort with persistently slow output suggests a skills-fit gap that another quarter of coaching is unlikely to close. Treat them generously with severance and a strong reference, which also protects team morale given how well-liked they are.",
+          "pick": "Let them go now",
+          "why": "In a six-person startup, each engineer is roughly a sixth of your capacity. Nine months is enough time to see whether someone fits the pace, and strong effort with persistently slow output suggests a skills-fit gap that another quarter of coaching is unlikely to close. Treat them generously with severance and a strong reference, which also protects team morale given how well-liked they are.",
+          "detail": ""
+        },
+        {
+          "modelId": "gpt-6-astra",
+          "modelName": "GPT-6 Astra",
+          "provider": "OpenAI",
+          "ok": true,
+          "status": 200,
+          "served": "gpt-6-astra",
+          "ms": 5924,
+          "text": "PICK: Coach another quarter\nWHY: Shipping slower alone doesn’t establish that they can’t meet expectations, especially without evidence of structured coaching. Set explicit delivery milestones and weekly feedback, with continued employment contingent on meeting those milestones by quarter’s end.",
+          "pick": "Coach another quarter",
+          "why": "Shipping slower alone doesn’t establish that they can’t meet expectations, especially without evidence of structured coaching. Set explicit delivery milestones and weekly feedback, with continued employment contingent on meeting those milestones by quarter’s end.",
+          "detail": ""
+        },
+        {
+          "modelId": "gemini-4-argon",
+          "modelName": "Gemini 4",
+          "provider": "Google",
+          "ok": true,
+          "status": 200,
+          "served": "gemini-4-argon",
+          "ms": 3136,
+          "text": "PICK: Let them go now\nWHY: In a six-person startup, each engineer represents a huge fraction of your total output, and you cannot afford a low performer when speed is existential. Nine months is more than enough time to establish baseline velocity, so another quarter of coaching will only drain leadership bandwidth and runway.",
+          "pick": "Let them go now",
+          "why": "In a six-person startup, each engineer represents a huge fraction of your total output, and you cannot afford a low performer when speed is existential. Nine months is more than enough time to establish baseline velocity, so another quarter of coaching will only drain leadership bandwidth and runway.",
+          "detail": ""
+        },
+        {
+          "modelId": "meta/llama-4-maverick",
+          "modelName": "Llama 4 Maverick",
+          "provider": "Meta",
+          "ok": true,
+          "status": 200,
+          "served": "meta/llama-4-maverick",
+          "ms": 1110,
+          "text": "PICK: Let them go now\nWHY: The engineer has already had nine months to adjust and hasn't shown significant improvement, and another quarter may not yield different results. Keeping underperforming employees can negatively impact team morale and productivity.",
+          "pick": "Let them go now",
+          "why": "The engineer has already had nine months to adjust and hasn't shown significant improvement, and another quarter may not yield different results. Keeping underperforming employees can negatively impact team morale and productivity.",
+          "detail": ""
+        },
+        {
+          "modelId": "deepseek/deepseek-v3.1",
+          "modelName": "DeepSeek V3.1",
+          "provider": "DeepSeek",
+          "ok": true,
+          "status": 200,
+          "served": "deepseek/deepseek-v3.1",
+          "ms": 4189,
+          "text": "PICK: Coach another quarter\nWHY: The engineer is well-liked and hardworking, indicating potential for improvement with targeted support. A structured coaching period can clarify if the issue is fixable before making a final decision.",
+          "pick": "Coach another quarter",
+          "why": "The engineer is well-liked and hardworking, indicating potential for improvement with targeted support. A structured coaching period can clarify if the issue is fixable before making a final decision.",
+          "detail": ""
+        }
+      ],
+      "split": {
+        "Let them go now": [
+          "Claude Opus 5.5",
+          "Gemini 4",
+          "Llama 4 Maverick"
+        ],
+        "Coach another quarter": [
+          "GPT-6 Astra",
+          "DeepSeek V3.1"
+        ]
+      },
+      "disagreement": 0.4,
+      "verdict": "Claude Opus 5.5 served the user best by providing a clear rationale for letting the engineer go, emphasizing the urgency of performance in a small startup. GPT-6 Astra's suggestion to invest in coaching lacks a strong justification for why the engineer might improve, while Gemini 4's reasoning is similar to Claude's but less empathetic towards the individual's situation."
+    },
+    {
+      "id": "raise-price-on-existing",
+      "topic": "startups",
+      "question": "You are doubling your price because you underpriced at launch. Do you grandfather every existing customer forever, or migrate them to the new price after 12 months?",
+      "options": [
+        "Grandfather forever",
+        "Migrate after 12 months"
+      ],
+      "columns": [
+        {
+          "modelId": "claude-opus-5-5",
+          "modelName": "Claude Opus 5.5",
+          "provider": "Anthropic",
+          "ok": true,
+          "status": 200,
+          "served": "claude-opus-5-5",
+          "ms": 2375,
+          "text": "PICK: Migrate after 12 months\nWHY: Grandfathering forever at half price locks in a growing base of unprofitable customers and caps your ability to fund the product they rely on. A 12-month runway with clear notice is generous enough to preserve trust while fixing the underlying pricing mistake.",
+          "pick": "Migrate after 12 months",
+          "why": "Grandfathering forever at half price locks in a growing base of unprofitable customers and caps your ability to fund the product they rely on. A 12-month runway with clear notice is generous enough to preserve trust while fixing the underlying pricing mistake.",
+          "detail": ""
+        },
+        {
+          "modelId": "gpt-6-astra",
+          "modelName": "GPT-6 Astra",
+          "provider": "OpenAI",
+          "ok": true,
+          "status": 200,
+          "served": "gpt-6-astra",
+          "ms": 3156,
+          "text": "PICK: Migrate after 12 months\nWHY: Permanent grandfathering locks in the pricing mistake and creates a growing gap between revenue and the cost of serving customers. A 12-month transition rewards early adopters while giving them time to budget or choose an alternative.",
+          "pick": "Migrate after 12 months",
+          "why": "Permanent grandfathering locks in the pricing mistake and creates a growing gap between revenue and the cost of serving customers. A 12-month transition rewards early adopters while giving them time to budget or choose an alternative.",
+          "detail": ""
+        },
+        {
+          "modelId": "gemini-4-argon",
+          "modelName": "Gemini 4",
+          "provider": "Google",
+          "ok": true,
+          "status": 200,
+          "served": "gemini-4-argon",
+          "ms": 3280,
+          "text": "PICK: Migrate after 12 months\nWHY: Grandfathering forever builds unsustainable technical debt and permanently depresses expansion revenue from your earliest cohorts. A 12-month grace period generously rewards early adopters for their loyalty while ensuring your unit economics eventually align across the entire customer base.",
+          "pick": "Migrate after 12 months",
+          "why": "Grandfathering forever builds unsustainable technical debt and permanently depresses expansion revenue from your earliest cohorts. A 12-month grace period generously rewards early adopters for their loyalty while ensuring your unit economics eventually align across the entire customer base.",
+          "detail": ""
+        },
+        {
+          "modelId": "meta/llama-4-maverick",
+          "modelName": "Llama 4 Maverick",
+          "provider": "Meta",
+          "ok": true,
+          "status": 200,
+          "served": "meta/llama-4-maverick",
+          "ms": 1047,
+          "text": "PICK: Grandfather forever\nWHY: To maintain customer trust and loyalty by honoring the original pricing agreement, ensuring long-term satisfaction and continued business.",
+          "pick": "Grandfather forever",
+          "why": "To maintain customer trust and loyalty by honoring the original pricing agreement, ensuring long-term satisfaction and continued business.",
+          "detail": ""
+        },
+        {
+          "modelId": "deepseek/deepseek-v3.1",
+          "modelName": "DeepSeek V3.1",
+          "provider": "DeepSeek",
+          "ok": true,
+          "status": 200,
+          "served": "deepseek/deepseek-v3.1",
+          "ms": 3290,
+          "text": "PICK: Grandfather forever\nWHY: It builds long-term trust and loyalty with early adopters, and avoids negative backlash or churn from sudden price changes.",
+          "pick": "Grandfather forever",
+          "why": "It builds long-term trust and loyalty with early adopters, and avoids negative backlash or churn from sudden price changes.",
+          "detail": ""
+        }
+      ],
+      "split": {
+        "Migrate after 12 months": [
+          "Claude Opus 5.5",
+          "GPT-6 Astra",
+          "Gemini 4"
+        ],
+        "Grandfather forever": [
+          "Llama 4 Maverick",
+          "DeepSeek V3.1"
+        ]
+      },
+      "disagreement": 0.4,
+      "verdict": "All three models provided the same answer, advocating for migrating customers after 12 months, and they each articulated the reasoning behind this choice effectively. A meaningful difference is that while Claude Opus emphasizes the need to fund the product, GPT-6 Astra focuses on budgeting for customers, and Gemini 4 highlights the impact on unit economics, showcasing varied perspectives on the implications of pricing strategies."
+    }
+  ]
+}
