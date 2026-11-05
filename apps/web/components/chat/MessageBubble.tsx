@@ -9,6 +9,7 @@ import DocumentCard from './DocumentCard';
 import ChartCard from './ChartCard';
 import ToolActivity, { toolCallsFor } from './ToolActivity';
 import MarkdownMessage from './MarkdownMessage';
+import PartBoundary from './PartBoundary';
 import AiCheckButton from './AiCheckButton';
 import { blockProgress } from '@/lib/chat/block-progress';
 import { modelName, modelProvider } from '@/lib/models';
@@ -121,7 +122,7 @@ function WebSearchChip({ count }: { count: number }) {
   );
 }
 
-export default function MessageBubble({
+function MessageBubbleInner({
   message,
   isStreaming = false,
   showAvatar = true,
@@ -227,9 +228,12 @@ export default function MessageBubble({
       <div className="max-w-[85%] min-w-0 space-y-3">
         {webSearchCount > 0 && <WebSearchChip count={webSearchCount} />}
         {routedModel && <RoutedChip modelId={routedModel} replacedModel={replacedModel} manualPick={manualPick} />}
-        <ToolActivity calls={toolCalls} />
-        {parts.map((part, i) =>
-          part.type === 'approval' ? (
+        <PartBoundary label="tools" resetKey={toolCalls.length}>
+          <ToolActivity calls={toolCalls} />
+        </PartBoundary>
+        {parts.map((part, i) => (
+          <PartBoundary key={i} label={part.type} resetKey={part.value}>
+          {          part.type === 'approval' ? (
             // messageId:blockIndex — stable across reloads and tabs because the
             // message id is persisted with the thread, unlike the mount-order
             // counter this replaced.
@@ -258,8 +262,9 @@ export default function MessageBubble({
             <ChartCard key={i} raw={part.value} />
           ) : part.value.trim() ? (
             <MarkdownMessage key={i}>{part.value}</MarkdownMessage>
-          ) : null
-        )}
+          ) : null}
+          </PartBoundary>
+        ))}
         {/* AI-text check: only on a finished assistant answer with enough prose
             to score, and never on a card-only message (approval/options/etc). */}
         {!isStreaming && !hasSpecialBlock && rawText.trim().length >= 40 && (
@@ -298,5 +303,16 @@ export default function MessageBubble({
         )}
       </div>
     </motion.div>
+  );
+}
+
+type MessageBubbleProps = Parameters<typeof MessageBubbleInner>[0];
+
+/** One bad message renders a notice in its place instead of taking down the thread. */
+export default function MessageBubble(props: MessageBubbleProps) {
+  return (
+    <PartBoundary label="message" resetKey={props.message.content}>
+      <MessageBubbleInner {...props} />
+    </PartBoundary>
   );
 }

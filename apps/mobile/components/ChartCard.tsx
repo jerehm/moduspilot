@@ -28,6 +28,9 @@ export function ChartCard({ raw }: { raw: string }) {
     try {
       const p = JSON.parse(raw) as ChartSpec;
       if (!p || !Array.isArray(p.data) || p.data.length === 0) return null;
+      // `k in data[0]` throws on a number or null row ({"data":[1,2]}), which
+      // crashed the whole chat render. Every row must be a plain object.
+      if (!p.data.every(r => r !== null && typeof r === 'object' && !Array.isArray(r))) return null;
       return p;
     } catch {
       return null;

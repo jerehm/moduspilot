@@ -9,6 +9,8 @@ import { BrandLoader } from '@/components/ui';
 import { SheetsProvider } from '@/components/ui/Sheets';
 import { registerPush } from '@/lib/push';
 
+export { AppErrorBoundary as ErrorBoundary } from '@/components/AppErrorBoundary';
+
 export default function AppLayout() {
   const { user, loading } = useAuth();
 
@@ -16,10 +18,16 @@ export default function AppLayout() {
     if (!user) return;
     registerPush(user.uid);
 
-    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+    const open = (response: Notifications.NotificationResponse) => {
       const data = response.notification.request.content.data as { type?: string } | undefined;
       router.navigate(data?.type === 'checkin' ? '/(app)/(tabs)/chat' : '/(app)/(tabs)/briefing');
-    });
+    };
+    const sub = Notifications.addNotificationResponseReceivedListener(open);
+    // A tap that LAUNCHED the app from killed arrives before the listener above
+    // exists, so it was dropped. Read it once at mount.
+    Notifications.getLastNotificationResponseAsync()
+      .then(r => { if (r) { open(r); void Notifications.clearLastNotificationResponseAsync().catch(() => {}); } })
+      .catch(() => {});
     return () => sub.remove();
   }, [user]);
 

@@ -263,13 +263,14 @@ export default function ChatWindow({
   }, [plan, defaultCompareModels]);
 
   const toggleCompareModel = (id: string) => {
-    setCompareModels(prev => {
-      const next = prev.includes(id)
-        ? prev.filter(m => m !== id)
-        : prev.length >= 3 ? prev : [...prev, id];
-      localStorage.setItem('modus:compareModels', JSON.stringify(next));
-      return next;
-    });
+    const prev = compareModels;
+    const next = prev.includes(id)
+      ? prev.filter(m => m !== id)
+      : prev.length >= 3 ? prev : [...prev, id];
+    setCompareModels(next);
+    // Outside the updater, and caught: full or blocked storage threw inside a
+    // setState updater, which crashed the render.
+    try { localStorage.setItem('modus:compareModels', JSON.stringify(next)); } catch { /* not persisted */ }
   };
   const [connectedServices, setConnectedServices] = useState<ConnectedServices | null>(null);
   // In-chat model selection ('auto' | model id | 'default').

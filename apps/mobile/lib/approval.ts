@@ -106,7 +106,7 @@ export async function submitApproval(
     });
     if (!res.ok) throw new Error('Failed to start connection.');
     const { url } = await res.json();
-    if (url) Linking.openURL(url);
+    if (url) Linking.openURL(url).catch(() => {});
     return;
   }
 
@@ -156,11 +156,11 @@ export function buildFollowUpMessage(
       const due = payload.dueDate as string | undefined;
       let msg = `Goal set: "${title}".`;
       if (due) msg += ` Targeting ${due}.`;
-      return msg + ` Progress starts at 0% — I'll track it as you go.`;
+      return msg + ` Progress starts at 0%, I'll track it as you go.`;
     }
     case 'create_habit': {
       const freq = (payload.frequency as string | undefined) ?? 'daily';
-      return `"${title}" is now a ${freq} habit. Day 1 starts today — let's build the streak.`;
+      return `"${title}" is now a ${freq} habit. Day 1 starts today, let's build the streak.`;
     }
     case 'schedule_event': {
       const date = payload.date as string | undefined;

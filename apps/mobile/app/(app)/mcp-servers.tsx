@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { collection, onSnapshot, addDoc, deleteDoc, doc, serverTimestamp, orderBy, query } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { API_BASE, getAuthHeader } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
@@ -29,11 +29,26 @@ type PluginTemplate = {
 };
 
 const PLUGIN_DIRECTORY: PluginTemplate[] = [
-  { id: 'deepwiki', name: 'DeepWiki', description: 'Ask questions about any public GitHub repo — its code and docs.', transport: 'http', url: 'https://mcp.deepwiki.com/mcp', tokenless: true },
+  { id: 'deepwiki', name: 'DeepWiki', description: 'Ask questions about any public GitHub repo, its code and docs.', transport: 'http', url: 'https://mcp.deepwiki.com/mcp', tokenless: true },
   { id: 'gitmcp', name: 'GitMCP', description: 'Docs & code search for popular open-source libraries.', transport: 'http', url: 'https://gitmcp.io/docs', tokenless: true },
   { id: 'mslearn', name: 'Microsoft Learn', description: 'Search official Microsoft, Azure, and .NET docs.', transport: 'http', url: 'https://learn.microsoft.com/api/mcp', tokenless: true },
-  { id: 'custom', name: 'Custom server', description: 'Connect any MCP server — paste its endpoint and an optional token.', transport: 'http' },
+  { id: 'custom', name: 'Custom server', description: 'Connect any MCP server, paste its endpoint and an optional token.', transport: 'http' },
 ];
+
+/**
+ * Add/remove go through the web API, like the web settings page. Writing
+ * Firestore directly skipped the paid-only check (MCP is MODUS and PILOT only),
+ * the 10 server cap, the URL safety check and the server cache reset, so a Free
+ * user could add a connector that then silently never ran.
+ */
+async function mcpApi(path: 'add' | 'remove', body: unknown): Promise<void> {
+  const headers = { 'Content-Type': 'application/json', ...(await getAuthHeader()) };
+  const res = await fetch(`${API_BASE}/api/mcp/${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(typeof data.error === 'string' ? data.error : `Request failed (${res.status})`);
+  }
+}
 
 export default function McpServersScreen() {
   const { user } = useAuth();
@@ -79,13 +94,13 @@ export default function McpServersScreen() {
       const data = await res.json().catch(() => ({} as { ok?: boolean; tools?: string[]; error?: string }));
       if (res.ok && data.ok) {
         const n = Array.isArray(data.tools) ? data.tools.length : 0;
-        setTestMsg({ ok: true, text: `Connected — ${n} tool${n === 1 ? '' : 's'} available` });
+        setTestMsg({ ok: true, text: `Connected, ${n} tool${n === 1 ? '' : 's'} available` });
         haptics.success();
       } else {
         setTestMsg({ ok: false, text: data.error || `Connection failed (${res.status})` });
       }
     } catch {
-      setTestMsg({ ok: false, text: 'Connection failed — check the URL and your network.' });
+      setTestMsg({ ok: false, text: 'Connection failed, check the URL and your network.' });
     } finally { setTesting(false); }
   }
 
@@ -93,16 +108,12 @@ export default function McpServersScreen() {
     if (!user || !name.trim() || !url.trim()) return;
     setSaving(true);
     try {
-      await addDoc(collection(db, 'users', user.uid, 'mcpServers'), {
-        name: name.trim(),
-        url: url.trim(),
-        authHeader: authHeader.trim() || null,
-        transport,
-        createdAt: serverTimestamp(),
-      });
+      await mcpApi('add', { name: name.trim(), url: url.trim(), authHeader: authHeader.trim() || undefined, transport });
       haptics.medium();
       setName(''); setUrl(''); setAuthHeader(''); setTransport('http'); setAdding(false); setTestMsg(null);
-    } catch { /* non-fatal */ } finally { setSaving(false); }
+    } catch (e) {
+      setTestMsg({ ok: false, text: e instanceof Error ? e.message : 'Could not add this plugin.' });
+    } finally { setSaving(false); }
   }
 
   function chooseTemplate(t: PluginTemplate) {
@@ -118,17 +129,17 @@ export default function McpServersScreen() {
     if (!user || !t.url || servers.some(s => s.url === t.url)) return;
     setAddingId(t.id);
     try {
-      await addDoc(collection(db, 'users', user.uid, 'mcpServers'), {
-        name: t.name, url: t.url, authHeader: null, transport: t.transport, createdAt: serverTimestamp(),
-      });
+      await mcpApi('add', { name: t.name, url: t.url, transport: t.transport });
       haptics.medium();
-    } catch { /* non-fatal */ } finally { setAddingId(null); }
+    } catch (e) {
+      Alert.alert('Plugins', e instanceof Error ? e.message : 'Could not add this plugin.');
+    } finally { setAddingId(null); }
   }
 
   async function removeServer(server: McpServer) {
     if (!user) return;
     const ok = await confirm({ title: `Remove "${server.name}"?`, message: 'This plugin will no longer be available in MODUS.', confirmLabel: 'Remove', destructive: true });
-    if (ok) deleteDoc(doc(db, 'users', user.uid, 'mcpServers', server.id)).catch(() => {});
+    if (ok) mcpApi('remove', { serverId: server.id }).catch(e => Alert.alert('Plugins', e instanceof Error ? e.message : 'Could not remove this plugin.'));
   }
 
   return (

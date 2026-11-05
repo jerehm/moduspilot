@@ -12,9 +12,12 @@ export async function getIdToken(): Promise<string | null> {
   const win = getMainWindow();
   if (!win) return null;
   try {
-    const token = await win.webContents.executeJavaScript(
-      'window.__modusGetToken__ ? window.__modusGetToken__() : null'
-    );
+    // Raced against 10s. A hung or crashed page never settles executeJavaScript,
+    // which left sync on "Syncing…" for good and stacked an auth poll a minute.
+    const token = await Promise.race([
+      win.webContents.executeJavaScript('window.__modusGetToken__ ? window.__modusGetToken__() : null'),
+      new Promise<null>(r => setTimeout(() => r(null), 10_000)),
+    ]);
     return typeof token === 'string' && token.length > 0 ? token : null;
   } catch (err) {
     log.error('[ingest] failed to read token from window', err);
@@ -72,6 +75,7 @@ export async function ingest(payload: IngestPayload): Promise<IngestResult | nul
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(60_000),
     });
     if (!res.ok) {
       log.error('[ingest] POST failed', res.status, await res.text().catch(() => ''));

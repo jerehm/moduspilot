@@ -23,27 +23,27 @@ const SECTIONS: Section[] = [
     icon: '🤖',
     tips: [
       {
-        title: 'Approval cards — approve, edit, or skip',
+        title: 'Approval cards: approve, edit or skip',
         body: 'When MODUS proposes an action (create goal, schedule event, send email), it surfaces an approval card. Approve it as-is, tap Edit to change it, or Skip to ignore it. Nothing executes until you say so.',
         tag: 'Core mechanic',
       },
       {
         title: 'Ask MODUS to create things from chat',
-        body: 'Say "add that as a goal", "create a task for X", "add a daily habit for Y", or "schedule that for Thursday at 3pm" — MODUS surfaces the right card immediately.',
+        body: 'Say "add that as a goal", "create a task for X", "add a daily habit for Y", or "schedule that for Thursday at 3pm", MODUS surfaces the right card immediately.',
       },
       {
         title: 'Email reply drafting',
-        body: 'Paste an email and say "draft a reply". MODUS asks you to pick a tone (Optimistic, Candid, Strategic) before writing — so the reply sounds like you. Then you approve the send.',
+        body: 'Paste an email and say "draft a reply". MODUS asks you to pick a tone (Optimistic, Candid, Strategic) before writing, so the reply sounds like you. Then you approve the send.',
         tag: 'Workflow',
       },
       {
         title: 'Schedule straight from an email',
-        body: 'Paste or forward an email and say "put this on my calendar". MODUS pulls out the date and time and surfaces a calendar hold — approve it and the event lands in Google Calendar.',
+        body: 'Paste or forward an email and say "put this on my calendar". MODUS pulls out the date and time and surfaces a calendar hold, approve it and the event lands in Google Calendar.',
         tag: 'Cross-tool',
       },
       {
         title: 'Tell MODUS who you are',
-        body: 'Settings → Personal context. Write 2–5 sentences about your role, how you like to work, and your priorities. MODUS reads this in every conversation.',
+        body: 'Settings → Personal context. Write 2 to 5 sentences about your role, how you like to work, and your priorities. MODUS reads this in every conversation.',
         tag: 'Setup tip',
       },
       {
@@ -53,7 +53,7 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    heading: 'Your Brain — AI model selection',
+    heading: 'Your Brain: AI model selection',
     icon: '🧠',
     tips: [
       {
@@ -78,12 +78,12 @@ const SECTIONS: Section[] = [
     ],
   },
   {
-    heading: 'Proactive — MODUS works on its own',
+    heading: 'Proactive: MODUS works on its own',
     icon: '✨',
     tips: [
       {
         title: 'MODUS triages your inbox for you',
-        body: 'MODUS scans your connected inbox for emails waiting on a reply, drafts a response in your voice, and pushes it to you. Approve, edit, or skip — nothing sends until you tap. Enable in Settings → Capabilities → Inbox Triage.',
+        body: 'MODUS scans your connected inbox for emails waiting on a reply, drafts a response in your voice, and pushes it to you. Approve, edit, or skip, nothing sends until you tap. Enable in Settings → Capabilities → Inbox Triage.',
         tag: 'Automatic',
       },
       {
@@ -93,7 +93,7 @@ const SECTIONS: Section[] = [
       },
       {
         title: 'Your morning briefing reads your whole day',
-        body: 'At the time you set, MODUS builds a briefing from your goals, tasks, habits, today\'s calendar, and unread inbox — your top 3, anything overdue, and habits at risk. Enable in Settings → Capabilities → Daily Briefing.',
+        body: 'At the time you set, MODUS builds a briefing from your goals, tasks, habits, today\'s calendar, and unread inbox, your top 3, anything overdue, and habits at risk. Enable in Settings → Capabilities → Daily Briefing.',
         tag: 'Daily',
       },
       {
@@ -132,7 +132,7 @@ const SECTIONS: Section[] = [
       },
       {
         title: 'Attach photos in chat',
-        body: 'Tap the image icon in chat to attach a photo from your library. MODUS can describe, analyze, or act on images — useful for receipts, screenshots, whiteboards, or anything visual.',
+        body: 'Tap the image icon in chat to attach a photo from your library. MODUS can describe, analyze, or act on images, useful for receipts, screenshots, whiteboards, or anything visual.',
       },
     ],
   },
@@ -165,7 +165,7 @@ const SECTIONS: Section[] = [
     tips: [
       {
         title: 'MODUS builds a profile of you over time',
-        body: 'With "Generate memory from chat" enabled (Settings → Memory), MODUS extracts key facts from your conversations — your preferences, recurring goals, communication style — and recalls them in future sessions.',
+        body: 'With "Generate memory from chat" enabled (Settings → Memory), MODUS extracts key facts from your conversations, your preferences, recurring goals, communication style, and recalls them in future sessions.',
       },
       {
         title: 'Add memories manually',
@@ -221,7 +221,7 @@ export default function TipsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text className="text-muted text-sm mb-4">
-          Everything you can do in MODUS — and how to get the most out of it.
+          Everything you can do in MODUS, and how to get the most out of it.
         </Text>
 
         <View className="gap-3">
@@ -238,7 +238,7 @@ export default function TipsScreen() {
         <View className="bg-brand/5 border border-brand/20 rounded-xl px-5 py-4 mt-4">
           <Text className="text-text font-semibold mb-1">Still figuring something out?</Text>
           <Text className="text-muted text-xs leading-5">
-            Ask MODUS directly in chat — it knows everything about itself and can walk you through any feature.
+            Ask MODUS directly in chat, it knows everything about itself and can walk you through any feature.
           </Text>
         </View>
       </ScrollView>

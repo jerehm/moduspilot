@@ -24,8 +24,9 @@ interface DocPayload { title?: string; markdown?: string }
 export default function DocumentCard({ raw }: { raw: string }) {
   let data: DocPayload;
   try { data = JSON.parse(raw); } catch { data = { markdown: raw }; }
-  const origTitle = (data.title ?? 'Document').trim();
-  const origMarkdown = (data.markdown ?? '').trim();
+  if (!data || typeof data !== 'object') data = { markdown: typeof data === 'string' ? data : raw };
+  const origTitle = String(data.title ?? 'Document').trim() || 'Document';
+  const origMarkdown = String(data.markdown ?? '').trim();
   const key = docKey(origTitle, origMarkdown);
 
   const [title, setTitle] = useState(origTitle);

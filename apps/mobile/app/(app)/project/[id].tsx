@@ -433,7 +433,7 @@ export default function ProjectDetail() {
                   <View className="w-8 h-8 rounded-xl bg-brand/10 items-center justify-center">
                     <Icon name={RESOURCE_ICON[r.type] ?? 'link'} tone="brand" size={17} />
                   </View>
-                  <TouchableOpacity className="flex-1" onPress={() => r.url && Linking.openURL(r.url)} activeOpacity={0.7}>
+                  <TouchableOpacity className="flex-1" onPress={() => { if (r.url) Linking.openURL(r.url).catch(() => {}); }} activeOpacity={0.7}>
                     <Text className="text-text text-[15px] font-medium" numberOfLines={1}>{r.label ?? r.title ?? r.url ?? r.type}</Text>
                     {r.url && <Text className="text-muted text-xs mt-0.5" numberOfLines={1}>{r.url}</Text>}
                   </TouchableOpacity>

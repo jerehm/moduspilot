@@ -54,6 +54,9 @@ export async function POST(req: Request) {
       model: openai('gpt-4o-mini'),
       temperature: 0.2,
       maxTokens: 90,
+      // A judge that cannot answer in 25s is not worth waiting on; it used to hit
+      // the 20s function cap and die without a response.
+      abortSignal: AbortSignal.timeout(25_000),
       system:
         'You compare answers from different AI models to the same question. In at most 2 short sentences, ' +
         'say which answer served the user best and why, and note one meaningful difference between the others. ' +
@@ -80,4 +83,4 @@ export async function POST(req: Request) {
   }
 }
 
-export const maxDuration = 20;
+export const maxDuration = 60;

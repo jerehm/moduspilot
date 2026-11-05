@@ -1,12 +1,10 @@
 import { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch, ActivityIndicator, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import * as WebBrowser from 'expo-web-browser';
 import { DetailHeader } from '@/components/DetailHeader';
 import { Icon } from '@/components/Icon';
 import { useSheets } from '@/components/ui/Sheets';
 import { useThemeColors } from '@/lib/theme';
-import { startCheckout } from '@/lib/api';
 import {
   currentUid, currentEmail, currentName, callGroup,
   subscribeUserGroup, subscribeGroup, subscribeMembers, subscribeMyInvites,
@@ -55,10 +53,6 @@ export default function GroupScreen() {
   const createGroup = () => run(async () => {
     const name = await prompt({ title: 'Start a group', message: 'Name your group (e.g. Acme founders).', confirmLabel: 'Create' });
     if (name?.trim()) await callGroup('create', { name: name.trim() });
-  });
-  const upgrade = () => run(async () => {
-    const url = await startCheckout('group');
-    await WebBrowser.openBrowserAsync(url);
   });
   const invite = () => run(async () => {
     const e = await prompt({ title: 'Invite someone', message: 'Their email address.', confirmLabel: 'Invite' });
@@ -113,15 +107,12 @@ export default function GroupScreen() {
           </View>
         )}
 
-        {/* No group, not on Group plan → upgrade */}
+        {/* No group, not on Group plan. Group has no Stripe price and was pulled
+            from customer surfaces, so the old $79 upgrade card always 400'd. */}
         {groupId === null && plan !== 'group' && myInvites.length === 0 && (
-          <View className="bg-surface border border-brand rounded-xl p-5 gap-2">
-            <Text className="text-muted text-[11px] font-bold tracking-widest">GROUP · $79/mo</Text>
-            <Text className="text-text text-lg font-semibold">A private MODUS for your whole group.</Text>
-            <Text className="text-muted text-[13px]">You plus 4 members, each with their own MODUS. Coordinate availability, share a group space, and get everything in MODUS for each person.</Text>
-            <TouchableOpacity onPress={upgrade} disabled={busy} className="bg-brand rounded-lg py-3 items-center mt-2">
-              <Text className="text-white font-semibold text-[15px]">Upgrade to Group</Text>
-            </TouchableOpacity>
+          <View className="bg-surface border border-border rounded-xl p-5 gap-2">
+            <Text className="text-text text-base font-semibold">Group plans are not open yet.</Text>
+            <Text className="text-muted text-[13px]">If someone invites you to their group, the invite shows up here.</Text>
           </View>
         )}
 
@@ -154,7 +145,7 @@ export default function GroupScreen() {
                 <TouchableOpacity onPress={addShared}><Icon name="add" tone="brand" size={20} /></TouchableOpacity>
               </View>
               {shared.length === 0 ? (
-                <Text className="text-muted text-[13px] px-4 py-4">Nothing here yet — add a trip or plan.</Text>
+                <Text className="text-muted text-[13px] px-4 py-4">Nothing here yet, add a trip or plan.</Text>
               ) : shared.map((s, i) => (
                 <View key={s.id} className={`px-4 py-3 flex-row items-start gap-2.5 ${i > 0 ? 'border-t border-border' : ''}`}>
                   <View className="flex-1">
@@ -185,7 +176,7 @@ export default function GroupScreen() {
                   </TouchableOpacity>
                 </View>
                 {sentInvites.map(inv => (
-                  <Text key={inv.id} className="text-muted text-[12px]">• {inv.email} — pending</Text>
+                  <Text key={inv.id} className="text-muted text-[12px]">• {inv.email}, pending</Text>
                 ))}
               </View>
             )}

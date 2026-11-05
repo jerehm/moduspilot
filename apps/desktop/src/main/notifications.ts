@@ -28,7 +28,7 @@ export async function pollNotifications(): Promise<void> {
 
   let items: RemoteNotification[];
   try {
-    const res = await fetch(NOTIFICATIONS_URL, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(NOTIFICATIONS_URL, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(20_000) });
     if (!res.ok) return;
     items = ((await res.json()) as { notifications: RemoteNotification[] }).notifications ?? [];
   } catch (err) {

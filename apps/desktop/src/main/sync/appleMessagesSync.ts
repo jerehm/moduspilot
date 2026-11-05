@@ -38,10 +38,17 @@ export function isFullDiskAccessGranted(): boolean {
 function snapshotChatDb(): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'modus-messages-'));
   const dest = path.join(tmpDir, 'chat.db');
-  fs.copyFileSync(CHAT_DB_PATH, dest);
-  for (const suffix of ['-wal', '-shm']) {
-    const src = CHAT_DB_PATH + suffix;
-    if (fs.existsSync(src)) fs.copyFileSync(src, dest + suffix);
+  try {
+    fs.copyFileSync(CHAT_DB_PATH, dest);
+    for (const suffix of ['-wal', '-shm']) {
+      const src = CHAT_DB_PATH + suffix;
+      if (fs.existsSync(src)) fs.copyFileSync(src, dest + suffix);
+    }
+  } catch (err) {
+    // A failed copy (disk full) left a partial 100MB+ copy behind on every
+    // 5 minute sync, filling the disk. The caller never learned the dir.
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    throw err;
   }
   return dest;
 }

@@ -1384,8 +1384,12 @@ export async function POST(req: Request) {
         const s = String(error);
         console.error('[chat] stream error:', s);
         const sl = s.toLowerCase();
-        // Normalize Groq/OpenAI rate limit errors → recognizable tokens for the client
-        if (sl.includes('tokens per day') || sl.includes('tpd') || sl.includes('daily')) return 'groq_daily_limit';
+        // Context overflow FIRST: "too many tokens" also matched the rate-limit
+        // check below, so the user was told to wait when a new chat is the fix.
+        if (sl.includes('context length') || sl.includes('context window') || sl.includes('maximum context') || sl.includes('prompt is too long') || sl.includes('input is too long') || sl.includes('too many tokens')) return 'context_too_long';
+        // Normalize Groq/OpenAI rate limit errors → recognizable tokens for the client.
+        // Bare "daily" caught unrelated messages; match the real daily-limit phrasings.
+        if (sl.includes('tokens per day') || sl.includes('tpd') || sl.includes('daily limit') || sl.includes('daily quota')) return 'groq_daily_limit';
         if (sl.includes('rate limit') || sl.includes('429') || sl.includes('too many')) return 'rate_limit_reached';
         if (sl.includes('401') || sl.includes('api key') || sl.includes('unauthorized')) return 'api_key_error';
         if (sl.includes('503') || sl.includes('502') || sl.includes('overloaded')) return 'provider_down';
@@ -1396,7 +1400,6 @@ export async function POST(req: Request) {
         // message). Kept the `message_too_large` alias for older cached clients.
         // A real context overflow (a huge tool result, a long chat) is not
         // "busy": waiting won't fix it, a new chat will.
-        if (sl.includes('context length') || sl.includes('context window') || sl.includes('maximum context') || sl.includes('prompt is too long') || sl.includes('input is too long') || sl.includes('too many tokens')) return 'context_too_long';
         if (sl.includes('too large') || sl.includes('tokens per minute') || sl.includes('reduce') || sl.includes('message_too_large')) return 'all_models_busy';
         // Don't leak raw provider/internal error text to the client.
         return 'chat_error';

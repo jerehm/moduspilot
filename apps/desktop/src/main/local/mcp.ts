@@ -1,4 +1,4 @@
-import { execFileSync } from 'child_process';
+import { execFile } from 'child_process';
 import crypto from 'crypto';
 import log from 'electron-log';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -27,15 +27,20 @@ export class LocalMcpError extends Error {}
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 20) || 'server';
 
 /** Apps opened from Finder get a bare PATH, so "npx" or "uvx" is not found. Use the login shell's. */
-let shellPath: string | null = null;
-function loginPath(): string {
-  if (shellPath !== null) return shellPath;
-  try {
+// Async, and a LOGIN shell without -i: the old execFileSync on `-ilc` ran the
+// user's interactive .zshrc on the main thread, froze the whole app for up to
+// 5s, and anything .zshrc printed ended up inside PATH. Markers fence the value.
+let shellPath: Promise<string> | null = null;
+function loginPath(): Promise<string> {
+  if (shellPath) return shellPath;
+  shellPath = new Promise<string>(resolve => {
     const sh = process.env.SHELL || '/bin/zsh';
-    shellPath = execFileSync(sh, ['-ilc', 'printf %s "$PATH"'], { timeout: 5000, encoding: 'utf8' }).trim();
-  } catch { shellPath = ''; }
-  const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
-  shellPath = [...new Set([...(shellPath || process.env.PATH || '').split(':'), ...extra].filter(Boolean))].join(':');
+    execFile(sh, ['-lc', 'printf "__MODUS_PATH__%s__MODUS_PATH__" "$PATH"'], { timeout: 5000, encoding: 'utf8' }, (_err, stdout) => {
+      const found = /__MODUS_PATH__(.*?)__MODUS_PATH__/s.exec(String(stdout ?? ''))?.[1]?.trim() ?? '';
+      const extra = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin'];
+      resolve([...new Set([...(found || process.env.PATH || '').split(':'), ...extra].filter(Boolean))].join(':'));
+    });
+  });
   return shellPath;
 }
 
@@ -79,19 +84,47 @@ export async function removeServer(id: string): Promise<void> {
   setLocalMcpAllowed(allowed);
 }
 
+/**
+ * Close a transport and make sure its process is really gone. The SDK's close
+ * only signals the child; a server that ignores SIGTERM (found by test: a
+ * server whose start timed out) stayed alive for the rest of the session.
+ */
+async function hardClose(transport: StdioClientTransport): Promise<void> {
+  const pid = transport.pid;
+  await transport.close().catch(() => {});
+  if (typeof pid !== 'number') return;
+  setTimeout(() => { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }, 2000).unref?.();
+}
+
 async function stop(id: string) {
   const l = live.get(id);
   if (!l) return;
   live.delete(id);
   if (l.idle) clearTimeout(l.idle);
   await l.client.close().catch(() => {});
+  await hardClose(l.transport);
 }
 
+/** True while any local server process exists, running or starting. */
+export function hasRunning(): boolean {
+  return live.size > 0 || startingTransports.size > 0;
+}
+
+/**
+ * Quit path. Kills every server process right away, including ones still
+ * starting. The old version first awaited servers that were still starting (the
+ * SDK's initialize timeout is 60s) and then the SDK's close() (2s, SIGTERM, 2s,
+ * SIGKILL), so the 3s quit cap fired first and children outlived the app.
+ */
 export async function stopAll(): Promise<void> {
-  // Servers still starting are not in `live` yet; wait for them so they are
-  // stopped too instead of finishing their start after the app is gone.
-  await Promise.allSettled([...starting.values()]);
-  await Promise.all([...live.keys()].map(stop));
+  const transports = [...[...live.values()].map(l => l.transport), ...startingTransports];
+  for (const l of live.values()) if (l.idle) clearTimeout(l.idle);
+  live.clear();
+  const pids = transports.map(t => t.pid).filter((p): p is number => typeof p === 'number');
+  for (const t of transports) void t.close().catch(() => {});
+  for (const pid of pids) { try { process.kill(pid, 'SIGTERM'); } catch { /* already gone */ } }
+  await new Promise(r => setTimeout(r, 1200));
+  for (const pid of pids) { try { process.kill(pid, 'SIGKILL'); } catch { /* already gone */ } }
 }
 
 function touch(id: string) {
@@ -104,6 +137,8 @@ function touch(id: string) {
 // One start per server at a time. toolDefs runs on every window focus, and two
 // quick focuses used to spawn the same server twice, leaving an orphan process.
 const starting = new Map<string, Promise<Client>>();
+// Transports between spawn and a finished connect, so quit can kill them too.
+const startingTransports = new Set<StdioClientTransport>();
 
 async function connect(cfg: LocalMcpServerConfig): Promise<Client> {
   const have = live.get(cfg.id);
@@ -119,19 +154,25 @@ async function start(cfg: LocalMcpServerConfig): Promise<Client> {
   const transport = new StdioClientTransport({
     command: cfg.command,
     args: cfg.args,
-    env: { ...(process.env as Record<string, string>), PATH: loginPath(), ...(cfg.env ?? {}) },
+    env: { ...(process.env as Record<string, string>), PATH: await loginPath(), ...(cfg.env ?? {}) },
     stderr: 'pipe',
   });
   transport.stderr?.on('data', (d: Buffer) => log.info(`[local-mcp:${cfg.name}] ${String(d).trim().slice(0, 500)}`));
   const client = new Client({ name: 'MODUS Desktop', version: '1.0.0' });
+  // Set BEFORE connect: the SDK chains a handler that was already there. Set
+  // after, it replaced the SDK's own, so a server that crashed mid-call left the
+  // pending callTool waiting out the full 120s instead of failing at once.
+  transport.onclose = () => { live.delete(cfg.id); };
+  startingTransports.add(transport);
   try {
     await client.connect(transport);
   } catch (e) {
     // A server that fails to start must not leave its process behind.
-    await transport.close().catch(() => {});
+    await hardClose(transport);
     throw e;
+  } finally {
+    startingTransports.delete(transport);
   }
-  transport.onclose = () => { live.delete(cfg.id); };
   live.set(cfg.id, { client, transport });
   touch(cfg.id);
   log.info(`[local-mcp] started ${cfg.name}`);

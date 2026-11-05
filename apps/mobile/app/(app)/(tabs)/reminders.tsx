@@ -287,7 +287,7 @@ export default function RemindersScreen() {
 
           {habits.length === 0 ? (
             <View className="py-6 items-center">
-              <Text className="text-muted text-sm">No habits yet — tell MODUS what you want to build.</Text>
+              <Text className="text-muted text-sm">No habits yet, tell MODUS what you want to build.</Text>
             </View>
           ) : (
             <View className="gap-2">

@@ -575,17 +575,23 @@ function DeletedList({ uid, onRestore, restoreFn }: {
   useEffect(() => {
     if (!uid) return;
     let unsub: (() => void) | undefined;
+    // Closing Trash before the import resolved ran cleanup with unsub still
+    // undefined, and the listener then stayed open for the rest of the session.
+    let cancelled = false;
     import('firebase/firestore').then(({ collection, query, where, orderBy, onSnapshot }) => {
+      if (cancelled) return;
       const q = query(
         collection(db, 'users', uid, 'conversations'),
         where('deleted', '==', true),
         orderBy('updatedAt', 'desc'),
       );
-      unsub = onSnapshot(q, snap => {
-        setDeleted(snap.docs.map(d => ({ id: d.id, title: d.data().title || 'Untitled' })));
-      });
-    });
-    return () => unsub?.();
+      unsub = onSnapshot(
+        q,
+        snap => setDeleted(snap.docs.map(d => ({ id: d.id, title: d.data().title || 'Untitled' }))),
+        err => console.error('[chat] trash listener failed:', err),
+      );
+    }).catch(() => {});
+    return () => { cancelled = true; unsub?.(); };
   }, [uid]);
 
   if (deleted.length === 0) {

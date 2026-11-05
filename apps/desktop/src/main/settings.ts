@@ -170,7 +170,13 @@ function read(): DesktopSettings {
 
 function write(s: DesktopSettings): void {
   try {
-    fs.writeFileSync(settingsFile(), JSON.stringify(s));
+    // Temp file + rename is atomic. A crash or power loss mid write left a
+    // truncated file that read() turned into {}: deviceId, local servers and
+    // their Always allow choices gone, and launch at login switched back on.
+    const file = settingsFile();
+    const tmp = `${file}.${process.pid}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(s));
+    fs.renameSync(tmp, file);
   } catch (err) {
     log.error('[settings] failed to persist', err);
   }

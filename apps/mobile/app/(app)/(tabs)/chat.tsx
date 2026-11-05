@@ -20,7 +20,8 @@ import { db } from '@/lib/firebase';
 import { streamChat, API_BASE, getAuthHeader, type Message, type GoalContext, type ProjectContext, type TaskContext } from '@/lib/api';
 import { readAsStringAsync } from 'expo-file-system/legacy';
 import { ModelSwitcher } from '@/components/ModelSwitcher';
-import { modelName } from '@/lib/models';
+import { modelName, effectivePlan } from '@/lib/models';
+import { chatErrorView } from '@/lib/chat-errors';
 import { useAuth } from '@/hooks/useAuth';
 import { useDrawer } from '@/components/AppDrawer';
 import { Icon, type IconName } from '@/components/Icon';
@@ -141,6 +142,13 @@ function extractTaskItems(text: string): string[] {
   return tasks.slice(0, 5);
 }
 
+/** Old or hand-edited Firestore messages can hold a non-string content; every reader here assumes a string. */
+function asText(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (Array.isArray(v)) return v.map(p => (p && typeof p === 'object' && typeof (p as { text?: unknown }).text === 'string' ? (p as { text: string }).text : '')).filter(Boolean).join('\n');
+  return v == null ? '' : String(v);
+}
+
 export default function ChatScreen() {
   const { open } = useDrawer();
   const { user } = useAuth();
@@ -182,7 +190,6 @@ export default function ChatScreen() {
         ? `task:${params.taskId}`
         : null;
   const handledScopeRef = useRef<string | null | undefined>(undefined);
-  const prefillHandledRef = useRef(false);
 
   useEffect(() => { convIdRef.current = convId; }, [convId]);
   useEffect(() => { scopeRef.current = scope; }, [scope]);
@@ -190,7 +197,20 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!user || handledScopeRef.current === scopeId) return;
     handledScopeRef.current = scopeId;
-    if (!scopeId) { setScope(null); return; }
+    if (!scopeId) {
+      // Leaving a goal/project/task chat used to clear only the scope: the
+      // messages and convId stayed, so the next send was saved into goal-xxx
+      // with no goal context. Start a clean thread instead.
+      if (scopeRef.current) {
+        abortRef.current?.abort();
+        setMessages([]);
+        setConvId(null);
+        convIdRef.current = null;
+        setProactiveKind(null);
+      }
+      setScope(null);
+      return;
+    }
 
     let alive = true;
     (async () => {
@@ -215,7 +235,7 @@ export default function ChatScreen() {
         });
         if (!alive) return;
         abortRef.current?.abort();
-        setMessages(existing.map(m => ({ id: m.id || newId(), role: m.role, content: m.content, annotations: m.annotations })));
+        setMessages(existing.map(m => ({ id: m.id || newId(), role: m.role, content: asText(m.content), annotations: m.annotations })));
         setProactiveKind(null);
         setConvId(convIdScoped);
         convIdRef.current = convIdScoped;
@@ -235,9 +255,12 @@ export default function ChatScreen() {
   // Live plan (unlocks models in the switcher) + persisted model choice.
   useEffect(() => {
     if (!user) return;
-    return onSnapshot(doc(db, 'users', user.uid), snap => {
-      setPlan((snap.data()?.plan as string) ?? 'free');
-    });
+    return onSnapshot(
+      doc(db, 'users', user.uid),
+      // Group members get PILOT models; the raw 'group' read as free here.
+      snap => setPlan(effectivePlan(snap.data()?.plan as string | undefined)),
+      () => { /* offline or rules: keep the last known plan */ },
+    );
   }, [user]);
 
   useEffect(() => {
@@ -253,16 +276,18 @@ export default function ChatScreen() {
     }).catch(() => {});
   }, [user]);
 
-  // Watchdog: `streaming` must always resolve. The server caps a request at 60s
-  // (maxDuration); if a socket instead stalls open, streaming would stick true and
-  // the composer (editable={!streaming}) would stay disabled. After 75s, abort and
-  // surface an error. The abort runs the AbortError path → finally sets streaming false.
+  // Watchdog: `streaming` must always resolve, or the composer
+  // (editable={!streaming}) stays disabled. The abort runs the AbortError path,
+  // whose finally sets streaming false. 310s, just past the server's 300s maxDuration. It was 75s from when the
+  // server capped at 60s, and it cut off long answers and tool runs while text
+  // was still arriving. Real hangs are caught sooner by the 45s stall watchdog
+  // in streamChat, which resets on every chunk.
   useEffect(() => {
     if (!streaming) return;
     const t = setTimeout(() => {
       abortRef.current?.abort();
       Alert.alert('Timed out', 'That response timed out. Please try again.');
-    }, 75000);
+    }, 310_000);
     return () => clearTimeout(t);
   }, [streaming]);
 
@@ -328,7 +353,7 @@ export default function ChatScreen() {
     setScope(null);
     try {
       const { messages: stored, proactive } = await loadConversation(user.uid, id);
-      setMessages(stored.map(m => ({ id: m.id || newId(), role: m.role, content: m.content, annotations: m.annotations })));
+      setMessages(stored.map(m => ({ id: m.id || newId(), role: m.role, content: asText(m.content), annotations: m.annotations })));
       setProactiveKind(proactive ?? null);
       setConvId(id);
       convIdRef.current = id;
@@ -430,7 +455,7 @@ export default function ChatScreen() {
     haptics.medium();
     const sendConvId = convIdRef.current;
 
-    const fallback = image ? 'Image' : files.length ? `📎 ${files.map(f => f.name).join(', ')}` : '';
+    const fallback = image ? 'Image' : files.length ? `Attached: ${files.map(f => f.name).join(', ')}` : '';
     const userMsg: UIMessage = {
       id: newId(),
       role: 'user',
@@ -516,25 +541,18 @@ export default function ChatScreen() {
         }
       } else {
         const msg = (e as Error)?.message ?? 'Something went wrong';
-        if (msg.includes('subscription_required')) {
-          Alert.alert(
-            'Start your free trial',
-            'MODUS is a paid product with a 3-day free trial. Choose a plan to continue.',
-            [
-              { text: 'Not now', style: 'cancel' },
-              { text: 'Start trial', onPress: () => router.push('/(app)/billing') },
-            ],
-          );
-        } else if (name === 'StallError') {
+        if (name === 'StallError') {
           Alert.alert('Response stalled', 'The response stalled. Please try again, or switch models.');
-        } else if (/context_too_long/.test(msg)) {
-          Alert.alert('Chat too long', 'This chat got too long for the model, often from a large tool result. Start a new chat and try again.');
-        } else if (/rate_limit|all_models_busy|429|busy/.test(msg)) {
-          Alert.alert('Busy', 'The AI is briefly busy right now. Wait a few seconds and try again.');
-        } else if (/limit_reached/.test(msg)) {
-          Alert.alert('Limit reached', "You've hit your usage limit for now. It refreshes soon, or upgrade for more.");
         } else {
-          Alert.alert('Error', 'Failed to get a response. Please try again.');
+          // Same words as the web chat for every server code (chat-errors.ts).
+          const view = chatErrorView(msg);
+          Alert.alert(
+            view.paywall ? 'Upgrade for more' : 'Could not answer',
+            view.text,
+            view.paywall
+              ? [{ text: 'Not now', style: 'cancel' }, { text: 'See plans', onPress: () => router.push('/(app)/billing') }]
+              : undefined,
+          );
         }
         setMessages(prev => prev.filter(m => m.id !== assistantId));
       }
@@ -550,15 +568,18 @@ export default function ChatScreen() {
 
   // Draft-reply / quick-ask entry: a screen opened chat with a prefilled prompt.
   useEffect(() => {
-    if (!user || prefillHandledRef.current) return;
+    // The param itself is the "handled" flag: it is cleared once sent. A
+    // one-shot ref made every prefill after the first in a session do nothing
+    // (the tab stays mounted). While a reply is streaming, wait for it to end
+    // rather than dropping the prefill.
+    if (!user || streaming) return;
     const p = params.prefill;
     if (typeof p === 'string' && p.trim()) {
-      prefillHandledRef.current = true;
-      void sendMessage(p);
       router.setParams({ prefill: '' });
+      void sendMessage(p);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, params.prefill]);
+  }, [user, params.prefill, streaming]);
 
   const appendFollowUp = useCallback((text: string) => {
     setMessages(prev => {

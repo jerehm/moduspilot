@@ -29,11 +29,15 @@ export function ApprovalCard({
   const data = useMemo<ApprovalData | null>(() => {
     try {
       const parsed = JSON.parse(raw);
+      // null, a bare string or a non-string field parsed fine and then crashed
+      // the render (data.type.replace, an object rendered as a Text child).
+      if (!parsed || typeof parsed !== 'object' || typeof parsed.type !== 'string') return null;
+      const text = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v));
       return {
         type: parsed.type,
-        title: parsed.title ?? '',
-        description: parsed.description ?? '',
-        payload: parsed.payload ?? {},
+        title: text(parsed.title),
+        description: text(parsed.description),
+        payload: parsed.payload && typeof parsed.payload === 'object' && !Array.isArray(parsed.payload) ? parsed.payload : {},
       };
     } catch {
       return null;
@@ -83,7 +87,7 @@ export function ApprovalCard({
       ? 'Opening connection…'
       : data.type === 'send_email'
         ? 'Email sent'
-        : `${editedTitle || data.title} — done`;
+        : `${editedTitle || data.title}, done`;
     return (
       <View className="border border-brand/30 bg-brand/5 rounded-2xl px-4 py-3 flex-row items-center gap-2">
         <Icon name="check-circle" tone="brand" size={18} />

@@ -47,7 +47,7 @@ export async function registerPush(uid: string): Promise<void> {
 
     const projectId = getProjectId();
     if (!projectId) {
-      console.warn('[push] No EAS projectId (extra.eas.projectId) — run `eas init`; skipping push registration.');
+      console.warn('[push] No EAS projectId (extra.eas.projectId), run `eas init`; skipping push registration.');
       return;
     }
 

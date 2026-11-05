@@ -170,7 +170,22 @@ export default function ApprovalCard({
   // would be a rules-of-hooks violation: the hook count would change if `raw`
   // ever flipped between parseable and not. (Same bug class fixed in DraftOptionsCard.)
   const parsed = useMemo<ApprovalPayload | null>(() => {
-    try { return JSON.parse(raw) as ApprovalPayload; } catch { return null; }
+    // Model output: `null`, a bare string, or an object field where text belongs
+    // all parsed fine and then crashed the render (.replace on a non-string).
+    let v: unknown;
+    try { v = JSON.parse(raw); } catch { return null; }
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+    const o = v as Record<string, unknown>;
+    if (typeof o.type !== 'string') return null;
+    const text = (x: unknown) => (typeof x === 'string' ? x : x == null ? '' : String(x));
+    return {
+      ...(o as unknown as ApprovalPayload),
+      title: text(o.title),
+      description: text(o.description),
+      payload: o.payload && typeof o.payload === 'object' && !Array.isArray(o.payload)
+        ? (o.payload as ApprovalPayload['payload'])
+        : {},
+    } as ApprovalPayload;
   }, [raw]);
 
   useEffect(() => {

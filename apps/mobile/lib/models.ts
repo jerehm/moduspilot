@@ -34,6 +34,38 @@ export function effectivePlan(plan: string | null | undefined): string {
   return plan === 'group' ? 'pilot' : (plan ?? 'free');
 }
 
+// MIRROR of LEGACY_MODEL_IDS in apps/web/lib/models.ts. A saved id from an
+// older catalog showed as a raw string with nothing ticked in the switcher.
+const LEGACY_MODEL_IDS: Record<string, string> = {
+  'gpt-4o': 'gpt-6.1-sol',
+  'o4-mini': 'gpt-6-astra',
+  'gemini-2.5-pro': 'gemini-3.8-flash',
+  'grok-3': 'gpt-6-astra',
+  'claude-sonnet-4-6': 'claude-sonnet-5-5',
+  'gpt-5.6-terra': 'gpt-6.1-sol',
+  'gpt-5.6-sol': 'gpt-6-astra',
+  'claude-sonnet-5': 'claude-sonnet-5-5',
+  'claude-opus-4-8': 'claude-opus-5-5',
+  'claude-fable-5': 'claude-fable-5-1',
+  'gemini-3.5-flash': 'gemini-3.8-flash',
+  'gemini-3.1-pro-preview': 'gemini-4-argon',
+  'llama-3.3-70b-versatile': 'meta/llama-3.3-70b',
+  'llama-3.1-8b-instant': 'meta/llama-3.1-8b',
+};
+
+/** Map a stored/legacy model id onto the catalog id that serves it. */
+export function canonicalModelId(id: string): string {
+  return LEGACY_MODEL_IDS[id] ?? id;
+}
+
 export function modelName(id: string): string {
-  return PLATFORM_MODELS.find(m => m.id === id)?.name ?? id;
+  const c = canonicalModelId(id);
+  return PLATFORM_MODELS.find(m => m.id === c)?.name ?? id;
+}
+
+/** Same order as the web switcher: unlocked first, then MODUS+, then PILOT. */
+export function sortedModels(plan: string): typeof PLATFORM_MODELS {
+  const ep = effectivePlan(plan);
+  const rank = (m: (typeof PLATFORM_MODELS)[number]) => (m.plans.includes(ep) ? 0 : m.plans.includes('modus') ? 1 : 2);
+  return [...PLATFORM_MODELS].sort((a, b) => rank(a) - rank(b));
 }

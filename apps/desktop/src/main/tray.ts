@@ -321,6 +321,7 @@ function rebuildMenu(): void {
 // Camera) — deep-link to the right System Settings pane and let the user grant
 // it, then retry sync. Notes and Messages share the same OS-level grant.
 async function handleGrantFullDiskAccess(): Promise<void> {
-  await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles');
+  await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles')
+    .catch((err) => log.error('[sync] could not open Full Disk Access settings', err));
   log.info('[sync] opened Full Disk Access settings pane');
 }

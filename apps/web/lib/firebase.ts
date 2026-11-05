@@ -28,6 +28,9 @@ export const auth = getAuth(app);
 // cache consistent across multiple open tabs. This makes every Firestore read in
 // the app fast on subsequent loads with no per-component changes.
 export const db = initializeFirestore(app, {
+  // A message field that is undefined (a tool record with no server label) made
+  // Firestore reject the whole conversation save. Drop undefined fields instead.
+  ignoreUndefinedProperties: true,
   experimentalForceLongPolling: true,
   localCache: persistentLocalCache({
     tabManager: persistentMultipleTabManager(),

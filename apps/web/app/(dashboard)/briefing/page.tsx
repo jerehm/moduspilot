@@ -20,7 +20,7 @@ import type { BriefingData, BriefingScheduleItem } from '@/lib/briefing';
 import type { GmailThread } from '@/lib/google-gmail';
 import type { CalendarEvent } from '@/lib/google-calendar';
 import { localDateStr } from '@/lib/dates';
-import MessageBubble from '@/components/chat/MessageBubble';
+import MessageBubble, { extractTextContent } from '@/components/chat/MessageBubble';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 interface Briefing {
@@ -1329,7 +1329,6 @@ function BriefingContent({ briefing, onEnergySelect, settings, saveMessages, aut
     const justFinished = prevLoadingRef.current && !isLoading;
     prevLoadingRef.current = isLoading;
     if (!justFinished || messages.length <= 1 || !user) return;
-    if (messages.length <= savedLengthRef.current) return;
     savedLengthRef.current = messages.length;
     saveMessages(briefing.id, messages);
   }, [isLoading, messages, briefing.id, saveMessages, user]);
@@ -1543,7 +1542,11 @@ function BriefingContent({ briefing, onEnergySelect, settings, saveMessages, aut
                 return <MessageBubble key={m.id} message={{ ...m, content: `Draft a reply → ${sub?.[1]?.trim() ?? 'email'}` }} />;
               }
               const isStreaming = isLoading && idx === chatMessages.length - 1 && m.role === 'assistant';
-              return <MessageBubble key={m.id} message={m} isStreaming={isStreaming} />;
+              return <MessageBubble key={m.id} message={m} isStreaming={isStreaming}
+              isLatest={idx === chatMessages.length - 1}
+              followingUserText={chatMessages[idx + 1]?.role === 'user' ? extractTextContent(chatMessages[idx + 1].content) : undefined}
+              onAppend={(text) => { setChatError(null); append({ role: 'user', content: text }); }}
+              onApproved={(text) => setMessages(prev => [...prev, { id: `approved-${Date.now()}`, role: 'assistant', content: text }])} />;
             })}
             {isAwaitingAssistantText(chatMessages, isLoading) && (
               <div className="flex gap-1 px-1">

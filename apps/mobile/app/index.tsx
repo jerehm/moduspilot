@@ -19,7 +19,10 @@ export default function Index() {
     let active = true;
     getDoc(doc(db, 'users', user.uid))
       .then(snap => { if (active) setOnboarded(snap.data()?.onboardingComplete === true); })
-      .catch(() => { if (active) setOnboarded(false); });
+      // Offline launch: a failed read is NOT "not onboarded". Sending an existing
+      // user back into onboarding is worse than skipping it for a new one, and
+      // the dashboard works from cache.
+      .catch(() => { if (active) setOnboarded(true); });
     return () => { active = false; };
   }, [user]);
 

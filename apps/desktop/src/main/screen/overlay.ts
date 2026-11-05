@@ -131,6 +131,14 @@ function create(): BrowserWindow {
 
   w.on('resize', () => rememberSize(w));
 
+  // A crashed overlay used to be reused forever (create() only checks
+  // isDestroyed), so the hotkey kept showing a dead transparent panel. Destroy
+  // it; the next hotkey builds a fresh one. 'closed' below does the teardown.
+  w.webContents.on('render-process-gone', (_e, details) => {
+    log.error(`[overlay] renderer gone (${details.reason}), destroying`);
+    if (!w.isDestroyed()) w.destroy();
+  });
+
   w.on('closed', () => {
     // Closing must tear down everything it started. A live request or a running
     // watch timer outliving its window is how a "closed" feature keeps spending
@@ -541,7 +549,9 @@ function wireIpc(): void {
     // macOS only applies a new Screen Recording grant to a fresh launch, so
     // "relaunch" is a real fix step here rather than a shrug.
     app.relaunch();
-    app.exit(0);
+    // quit, not exit: exit(0) skipped before-quit, so local MCP server
+    // processes were never stopped and the hotkeys stayed registered.
+    app.quit();
   });
 
   ipcMain.on('assist:open-app', () => showMainWindow());

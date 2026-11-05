@@ -1,6 +1,7 @@
 'use client';
 
 import { FilesBrowser } from '@/components/workspace/WorkspacePanel';
+import { plainTextForSave } from '@/lib/chat/save-content';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
@@ -15,7 +16,7 @@ import { useChat } from 'ai/react';
 import { useChatSafety, useChatSafetyWatch } from '@/hooks/useChatSafety';
 import { isAwaitingAssistantText } from '@/lib/chat/pending';
 import type { Message } from 'ai';
-import MessageBubble from '@/components/chat/MessageBubble';
+import MessageBubble, { extractTextContent } from '@/components/chat/MessageBubble';
 import { useConversationModel } from '@/hooks/useConversationModel';
 import ModelSwitcher from '@/components/chat/ModelSwitcher';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -70,7 +71,8 @@ function sanitizeMessages(msgs: Message[]): { id: string; role: string; content:
   return msgs.map(m => ({
     id: m.id,
     role: m.role,
-    content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+    // Was JSON.stringify(array): reloaded as raw JSON (base64 included) in the bubble.
+    content: plainTextForSave(m.content),
   }));
 }
 
@@ -306,7 +308,9 @@ function ProjectDetailPageContent() {
   useEffect(() => {
     const justFinished = prevLoadingRef.current && !isLoading;
     prevLoadingRef.current = isLoading;
-    if (!justFinished || messages.length === 0 || messages.length <= savedLengthRef.current) return;
+    // Every finished turn saves. A length check skipped regenerate and the empty-answer
+    // retry (same count, new answer), so those answers were gone after a reload.
+    if (!justFinished || messages.length === 0) return;
     savedLengthRef.current = messages.length;
     saveConversation(messages);
   }, [isLoading, messages, saveConversation]);
@@ -1319,6 +1323,10 @@ function ProjectDetailPageContent() {
               key={m.id}
               message={m}
               isStreaming={isLoading && idx === messages.length - 1 && m.role === 'assistant'}
+              isLatest={idx === messages.length - 1}
+              followingUserText={messages[idx + 1]?.role === 'user' ? extractTextContent(messages[idx + 1].content) : undefined}
+              onAppend={(text) => { setChatError(null); append({ role: 'user', content: text }); }}
+              onApproved={(text) => setMessages(prev => [...prev, { id: `approved-${Date.now()}`, role: 'assistant', content: text }])}
             />
           ))}
           {/* Was a bare `isLoading`, the inverse of the bug the other three had:

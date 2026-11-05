@@ -132,7 +132,7 @@ export default function TaskDetail() {
             >
               {task.title}
             </Text>
-            <Text className="text-muted text-xs mt-1">{task.done ? 'Completed — tap to reopen' : 'Tap to mark done'}</Text>
+            <Text className="text-muted text-xs mt-1">{task.done ? 'Completed, tap to reopen' : 'Tap to mark done'}</Text>
           </View>
         </TouchableOpacity>
 

@@ -106,7 +106,7 @@ const ENERGY_OPTS = [
 const ENERGY_CONFIRM: Record<string, string> = {
   fully_charged: 'front-load your hardest work.',
   okay: 'pace your day around your top 3.',
-  running_low: 'protect your focus — only essentials today.',
+  running_low: 'protect your focus, only essentials today.',
 };
 
 function HabitStatusPill({ status, streak }: { status: BriefingHabit['status']; streak: number }) {
@@ -146,7 +146,7 @@ function evPct(m: number) { return ((Math.max(START_H * 60, Math.min(END_H * 60,
 function ScheduleTimeline({ events, fallback, color }: { events: CalEvent[]; fallback: ScheduleItem[]; color: string }) {
   const day = events.filter(e => !e.allDay && e.start);
   if (day.length === 0 && fallback.length === 0) {
-    return <Text className="text-muted text-xs">No meetings today — clear runway.</Text>;
+    return <Text className="text-muted text-xs">No meetings today, clear runway.</Text>;
   }
   if (day.length === 0) {
     return (
@@ -396,7 +396,7 @@ export default function BriefingScreen() {
     updateDoc(doc(db, 'users', user.uid, 'habits', h.id), { completedDates: dates, streak: recalcStreak(dates) }).catch(() => {});
   }
   function draftReply(t: InboxThread) {
-    const prompt = `Write a draft reply for this email directly in chat — just the reply text. When I say "send it", generate a send_email approval card with threadId: "${t.id}", subject: "Re: ${t.subject}", and body = the draft.\n\nFrom: ${t.from}\nSubject: ${t.subject}\n\n${t.snippet}`;
+    const prompt = `Write a draft reply for this email directly in chat, just the reply text. When I say "send it", generate a send_email approval card with threadId: "${t.id}", subject: "Re: ${t.subject}", and body = the draft.\n\nFrom: ${t.from}\nSubject: ${t.subject}\n\n${t.snippet}`;
     router.push({ pathname: '/(app)/(tabs)/chat', params: { prefill: prompt } });
   }
 
@@ -511,11 +511,11 @@ export default function BriefingScreen() {
                 )}
                 {health.sleep && (
                   <Text className="text-text text-[13px]">
-                    Sleep — <Text className="font-semibold" style={{ color: '#10b981' }}>{health.sleep.hours}h {health.sleep.minutes}m</Text>
+                    Sleep: <Text className="font-semibold" style={{ color: '#10b981' }}>{health.sleep.hours}h {health.sleep.minutes}m</Text>
                   </Text>
                 )}
                 {health.heartRate && (
-                  <Text className="text-muted text-xs">Heart rate — {health.heartRate} bpm</Text>
+                  <Text className="text-muted text-xs">Heart rate: {health.heartRate} bpm</Text>
                 )}
               </View>
             </LabeledCard>
@@ -751,7 +751,7 @@ export default function BriefingScreen() {
             ) : (
               <View>
                 {news.slice(0, 5).map((item, i) => (
-                  <TouchableOpacity key={i} onPress={() => Linking.openURL(item.url)} activeOpacity={0.7} className={`py-3 ${i < Math.min(news.length, 5) - 1 ? 'border-b border-border/50' : ''}`}>
+                  <TouchableOpacity key={i} onPress={() => { Linking.openURL(item.url).catch(() => {}); }} activeOpacity={0.7} className={`py-3 ${i < Math.min(news.length, 5) - 1 ? 'border-b border-border/50' : ''}`}>
                     <Text className="text-text text-[13px] font-medium leading-snug" numberOfLines={2}>{item.title}</Text>
                     {!!item.snippet && <Text className="text-muted text-[11px] mt-0.5" numberOfLines={2}>{item.snippet}</Text>}
                     {!!hostname(item.url) && <Text className="text-muted/60 text-[10px] mt-1">{hostname(item.url)}</Text>}

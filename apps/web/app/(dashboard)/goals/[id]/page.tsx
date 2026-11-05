@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { plainTextForSave } from '@/lib/chat/save-content';
 import { useParams, useRouter } from 'next/navigation';
 import {
   doc, onSnapshot, updateDoc, collection, query, where,
@@ -14,7 +15,7 @@ import { useChat } from 'ai/react';
 import { useChatSafety, useChatSafetyWatch } from '@/hooks/useChatSafety';
 import { isAwaitingAssistantText } from '@/lib/chat/pending';
 import type { Message } from 'ai';
-import MessageBubble from '@/components/chat/MessageBubble';
+import MessageBubble, { extractTextContent } from '@/components/chat/MessageBubble';
 import { useConversationModel } from '@/hooks/useConversationModel';
 import ModelSwitcher from '@/components/chat/ModelSwitcher';
 import { motion } from 'framer-motion';
@@ -113,7 +114,8 @@ function sanitizeMessages(msgs: Message[]): { id: string; role: string; content:
   return msgs.map(m => ({
     id: m.id,
     role: m.role,
-    content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+    // Was JSON.stringify(array): reloaded as raw JSON (base64 included) in the bubble.
+    content: plainTextForSave(m.content),
   }));
 }
 
@@ -403,7 +405,9 @@ function GoalDetailPageContent() {
   useEffect(() => {
     const justFinished = prevLoadingRef.current && !isLoading;
     prevLoadingRef.current = isLoading;
-    if (!justFinished || messages.length === 0 || messages.length <= savedLengthRef.current) return;
+    // Every finished turn saves. A length check skipped regenerate and the empty-answer
+    // retry (same count, new answer), so those answers were gone after a reload.
+    if (!justFinished || messages.length === 0) return;
     savedLengthRef.current = messages.length;
     saveConversation(messages);
   }, [isLoading, messages, saveConversation]);
@@ -1263,7 +1267,12 @@ function GoalDetailPageContent() {
 
           <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.map((m, idx) => (
-              <MessageBubble key={m.id} message={m} isStreaming={isLoading && idx === messages.length - 1} />
+              <MessageBubble key={m.id} message={m} isStreaming={isLoading && idx === messages.length - 1}
+              isLatest={idx === messages.length - 1}
+              followingUserText={messages[idx + 1]?.role === 'user' ? extractTextContent(messages[idx + 1].content) : undefined}
+              onAppend={(text) => { setChatError(null); append({ role: 'user', content: text }); }}
+              onApproved={(text) => setMessages(prev => [...prev, { id: `approved-${Date.now()}`, role: 'assistant', content: text }])}
+              />
             ))}
             {isAwaitingAssistantText(messages, isLoading) && (
               <div className="flex gap-1 px-1">

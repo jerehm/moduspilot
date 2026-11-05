@@ -50,6 +50,10 @@ async function callAnyTool(name: string, args: Record<string, unknown>): Promise
     }
   } catch (err) {
     if (err instanceof FolderError || err instanceof LocalMcpError) return fail(err.message);
+    // A missing file is the model's mistake, not a broken Mac: say so, so it can correct the path.
+    if ((err as NodeJS.ErrnoException)?.code === 'ENOENT') return fail('That file does not exist in the folder.');
+    if ((err as NodeJS.ErrnoException)?.code === 'EISDIR') return fail('That path is a folder, not a file.');
+    if (/connection closed/i.test(String((err as Error)?.message ?? ''))) return fail('The local server stopped while running this tool.');
     throw err;
   }
 }

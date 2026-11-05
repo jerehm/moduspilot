@@ -154,12 +154,15 @@ function PaywallScreen({
   industry,
   goals,
   onContinue,
+  onFree,
   onBack,
 }: {
   name: string;
   industry: string;
   goals: string[];
   onContinue: () => void;
+  /** Skip checkout and start on the Free plan. */
+  onFree: () => void;
   onBack: () => void;
 }) {
   const c = useThemeColors();
@@ -243,16 +246,16 @@ function PaywallScreen({
           {/* Plan comparison */}
           <AnimatedRow index={9}>
             <View className="flex-row gap-3 mb-6">
-              {/* Trial */}
+              {/* Free */}
               <View className="flex-1 bg-surface border border-border rounded-2xl p-4">
-                <Text className="text-text font-bold text-sm mb-1">Trial</Text>
-                <Text className="text-2xl font-display font-black text-text">3 days</Text>
+                <Text className="text-text font-bold text-sm mb-1">Free</Text>
+                <Text className="text-2xl font-display font-black text-text">$0</Text>
                 <Text className="text-muted text-[11px] mt-1 leading-relaxed">
-                  {'free, then\n$24/mo'}
+                  {'no card'}
                 </Text>
                 <View className="mt-3 gap-1.5">
-                  <Text className="text-muted text-[11px]">· Full access</Text>
-                  <Text className="text-muted text-[11px]">· Cancel anytime</Text>
+                  <Text className="text-muted text-[11px]">· Open models</Text>
+                  <Text className="text-muted text-[11px]">· Limits refresh daily</Text>
                 </View>
               </View>
               {/* MODUS paid */}
@@ -263,11 +266,11 @@ function PaywallScreen({
                     <Text className="text-brand-light text-[9px] font-bold">POPULAR</Text>
                   </View>
                 </View>
-                <Text className="text-2xl font-display font-black text-text">$24</Text>
+                <Text className="text-2xl font-display font-black text-text">$28</Text>
                 <Text className="text-muted text-[11px]">/month</Text>
                 <View className="mt-3 gap-1.5">
-                  <Text className="text-text text-[11px]">· Unlimited messages</Text>
-                  <Text className="text-text text-[11px]">· All integrations</Text>
+                  <Text className="text-text text-[11px]">· Every provider</Text>
+                  <Text className="text-text text-[11px]">· Higher limits</Text>
                   <Text className="text-text text-[11px]">· Proactive briefings</Text>
                 </View>
               </View>
@@ -278,14 +281,17 @@ function PaywallScreen({
           <AnimatedRow index={10}>
             <View className="gap-3">
               <GradientButton
-                label="Start my 3-day free trial"
+                label="Get MODUS"
                 onPress={onContinue}
                 size="lg"
                 style={{ alignSelf: 'stretch' }}
               />
               <Text className="text-muted/70 text-[11px] text-center leading-4">
-                Then $24/mo. Card required. Cancel anytime.
+                $28/mo or $280/yr. Cancel anytime.
               </Text>
+              <TouchableOpacity onPress={onFree} className="py-2 items-center">
+                <Text className="text-muted text-sm">Start on Free</Text>
+              </TouchableOpacity>
             </View>
           </AnimatedRow>
         </ScrollView>
@@ -327,7 +333,7 @@ function ModelsScreen({ name, onContinue, onBack }: { name: string; onContinue: 
               {'Every model.\nOne app.'}
             </GradientText>
             <Text className="text-muted text-sm text-center mt-2 px-2">
-              GPT-6, Claude, Gemini, Llama{name.trim() ? '' : ''} — MODUS routes each task to whichever is best. Or pick one yourself.
+              GPT-6, Claude, Gemini, Llama{name.trim() ? '' : ''}, MODUS routes each task to whichever is best. Or pick one yourself.
             </Text>
           </Animated.View>
 
@@ -349,7 +355,7 @@ function ModelsScreen({ name, onContinue, onBack }: { name: string; onContinue: 
                 <Icon name="auto-awesome" tone="brand" size={22} />
               </View>
               <View className="flex-1">
-                <Text className="text-brand-light font-bold text-[15px]">Auto — MODUS picks for you</Text>
+                <Text className="text-brand-light font-bold text-[15px]">Auto: MODUS picks for you</Text>
                 <Text className="text-muted text-xs mt-0.5 leading-relaxed">
                   Claude for writing & analysis, a reasoning model for code & math, real-time for research, fast Llama for everyday.
                 </Text>
@@ -441,6 +447,9 @@ export default function OnboardingScreen() {
     7: true,
   };
 
+  // Set on the paywall: true = checkout MODUS after sign-in, false = start on Free.
+  const wantsPaidRef = useRef(true);
+
   async function seedAndGo(uid: string) {
     setSaving(true);
     setScreen('done');
@@ -519,13 +528,16 @@ export default function OnboardingScreen() {
         }).catch(() => {});
       }
 
-      // Start the 3-day card-required trial via Stripe Checkout (the trial is
-      // applied server-side). If it can't start, fall through to the app — the
-      // chat gate surfaces the paywall when they try to use it.
-      try {
-        const url = await startCheckout('modus');
-        await WebBrowser.openBrowserAsync(url);
-      } catch { /* fall through */ }
+      // Checkout only when they chose MODUS on the paywall. There is no free
+      // trial: checkout charges, so the old "3-day free trial" copy was untrue,
+      // and a user who wants Free must not be sent to a card form. If checkout
+      // can't start, fall through to the app on Free.
+      if (wantsPaidRef.current) {
+        try {
+          const url = await startCheckout('modus');
+          await WebBrowser.openBrowserAsync(url);
+        } catch { /* fall through */ }
+      }
       setTimeout(() => router.replace('/(app)/(tabs)/briefing'), 900);
     } catch {
       setTimeout(() => router.replace('/(app)/(tabs)/briefing'), 900);
@@ -638,7 +650,8 @@ export default function OnboardingScreen() {
         name={name}
         industry={industryLabel}
         goals={goalsArr}
-        onContinue={() => goForward(8)}
+        onContinue={() => { wantsPaidRef.current = true; goForward(8); }}
+        onFree={() => { wantsPaidRef.current = false; goForward(8); }}
         onBack={() => goBack('models')}
       />
     );
@@ -738,7 +751,7 @@ export default function OnboardingScreen() {
           <TextInput
             value={thirtyDayGoal}
             onChangeText={setThirtyDayGoal}
-            placeholder="Be specific — MODUS will hold you to it."
+            placeholder="Be specific, MODUS will hold you to it."
             placeholderTextColor="#6b6b80"
             multiline
             autoFocus
@@ -832,7 +845,7 @@ export default function OnboardingScreen() {
           )}
 
           <Text className="text-muted/70 text-[11px] text-center px-4 leading-4">
-            3-day free trial · Card required · Cancel anytime
+            {wantsPaidRef.current ? 'MODUS is $28/mo. Cancel anytime.' : 'Free plan. Upgrade anytime.'}
           </Text>
         </View>
       ),

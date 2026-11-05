@@ -13,7 +13,8 @@
 //   2. the signed binary is actually started, when it matches this Mac's
 //      architecture, and must not be killed by a signal within a few seconds
 const { execFileSync, spawn } = require('child_process');
-const { existsSync, readdirSync } = require('fs');
+const { existsSync, readdirSync, mkdtempSync, rmSync } = require('fs');
+const os = require('os');
 const path = require('path');
 
 // Entitlements that macOS only honours on a Developer ID app when an embedded
@@ -47,7 +48,11 @@ function launchProbe(app) {
   const name = readdirSync(path.join(app, 'Contents/MacOS'))[0];
   const bin = path.join(app, 'Contents/MacOS', name);
   return new Promise((resolve) => {
-    const child = spawn(bin, [], { stdio: 'ignore' });
+    // A throwaway profile, so the probe never touches the real one and never
+    // meets the installed app's single-instance lock.
+    const profile = mkdtempSync(path.join(os.tmpdir(), 'modus-probe-'));
+    const child = spawn(bin, [`--user-data-dir=${profile}`], { stdio: 'ignore' });
+    child.on('exit', () => { try { rmSync(profile, { recursive: true, force: true }); } catch {} });
     let done = false;
     const finish = (r) => { if (!done) { done = true; resolve(r); } };
     child.on('exit', (code, signal) => finish({ code, signal }));
@@ -76,7 +81,9 @@ async function verify(app, arch) {
     if (r.alive) console.log(`[verify-signed-app] launch probe: started and stayed up (${path.basename(app)})`);
     else if (r.signal || r.code === 137) problems.push(`launch probe: killed at start (signal ${r.signal ?? 'SIGKILL'}, code ${r.code})`);
     else if (r.error) problems.push(`launch probe: could not start (${r.error})`);
-    else console.log(`[verify-signed-app] launch probe: exited cleanly with code ${r.code} (another instance is probably running)`);
+    // Exit 0 used to pass as "another instance is probably running", which meant
+    // the check passed without testing anything whenever MODUS was open here.
+    else problems.push(`launch probe: exited at start with code ${r.code} instead of staying up (quit any running MODUS Desktop and rebuild)`);
   } else {
     console.log(`[verify-signed-app] launch probe skipped: ${arch} build on a ${process.arch} Mac (entitlement check still ran)`);
   }

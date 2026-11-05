@@ -175,6 +175,12 @@ export default function CompareCard({
   const startedRef = useRef(false);
   const fannedRef = useRef(false);
   const abortRef = useRef<AbortController[]>([]);
+  // Columns are built from `models` once at mount. Fan out to that same list, or a
+  // picker change during the clarify question lands answers under the wrong names.
+  const modelsRef = useRef(models);
+  // The verdict is asked for ONCE per card. A null verdict (no key, model error,
+  // 429) used to flip verdictLoading back to false and re-fire the effect forever.
+  const verdictTriedRef = useRef(false);
 
   const runColumn = useCallback(async (modelId: string, index: number, token: string, finalPrompt: string) => {
     const ctrl = new AbortController();
@@ -261,8 +267,8 @@ export default function CompareCard({
       setColumns(c => c.map(col => ({ ...col, status: 'error', error: 'Not signed in.' })));
       return;
     }
-    await Promise.all(models.map((m, i) => runColumn(m, i, token, finalPrompt)));
-  }, [models, runColumn]);
+    await Promise.all(modelsRef.current.map((m, i) => runColumn(m, i, token, finalPrompt)));
+  }, [runColumn]);
 
   // Ask MODUS whether anything needs clarifying first. A vague prompt sent to 3
   // models produces 3 answers to 3 different questions, which compares nothing.
@@ -319,7 +325,8 @@ export default function CompareCard({
   const allSettled = columns.every(c => c.status !== 'streaming');
   const answered = columns.filter(c => c.status === 'done' && c.text.trim());
   useEffect(() => {
-    if (!allSettled || verdict || verdictLoading || answered.length < 2) return;
+    if (!allSettled || verdict || verdictTriedRef.current || answered.length < 2) return;
+    verdictTriedRef.current = true;
     setVerdictLoading(true);
     (async () => {
       try {
@@ -335,11 +342,13 @@ export default function CompareCard({
         });
         const data = await res.json().catch(() => ({})) as { verdict?: string | null };
         if (data.verdict) setVerdict(data.verdict);
+      } catch {
+        // No verdict is fine; the three answers are the product.
       } finally {
         setVerdictLoading(false);
       }
     })();
-  }, [allSettled, answered, prompt, verdict, verdictLoading]);
+  }, [allSettled, answered, prompt, verdict]);
 
   return (
     <motion.div

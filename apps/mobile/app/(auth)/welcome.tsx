@@ -35,7 +35,7 @@ export default function WelcomeScreen() {
               Your AI chief{'\n'}of staff.
             </Text>
             <Text className="text-muted text-sm text-center mt-3 leading-relaxed px-2">
-              Email, calendar, goals, habits, memory — MODUS runs all of it so you can focus on what matters.
+              Email, calendar, goals, habits, memory, MODUS runs all of it so you can focus on what matters.
             </Text>
           </View>
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { annotationsForSave } from '@/lib/chat/tool-activity';
+import { contentForSave } from '@/lib/chat/save-content';
 import { useEffect, useState, useCallback } from 'react';
 import {
   collection, query, orderBy, onSnapshot,
@@ -109,8 +110,8 @@ export function useConversations(uid: string | null) {
         // ever records) folded into the saved modusTools annotation.
         const annotations = annotationsForSave(m);
         return annotations
-          ? { id: m.id, role: m.role, content: m.content, annotations }
-          : { id: m.id, role: m.role, content: m.content };
+          ? { id: m.id, role: m.role, content: contentForSave(m.content), annotations }
+          : { id: m.id, role: m.role, content: contentForSave(m.content) };
       }),
       updatedAt: serverTimestamp(),
     };

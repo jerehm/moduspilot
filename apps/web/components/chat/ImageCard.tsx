@@ -27,7 +27,9 @@ export default function ImageCard({ raw }: { raw: string }) {
 
   let data: ImagePayload;
   try { data = JSON.parse(raw); } catch { data = { prompt: raw }; }
-  const prompt = (data.prompt ?? '').trim();
+  // `null` or a non-object parses fine and then crashed on data.prompt.
+  if (!data || typeof data !== 'object') data = { prompt: typeof data === 'string' ? data : '' };
+  const prompt = String(data.prompt ?? '').trim();
 
   async function generate(force = false) {
     setStatus('loading');
@@ -60,7 +62,9 @@ export default function ImageCard({ raw }: { raw: string }) {
   }
 
   useEffect(() => {
-    if (startedRef.current || !prompt) return;
+    // No prompt means nothing will ever load; say so instead of spinning forever.
+    if (!prompt) { setError('The model sent an empty image request.'); setStatus('error'); return; }
+    if (startedRef.current) return;
     startedRef.current = true;
     void generate();
   // eslint-disable-next-line react-hooks/exhaustive-deps

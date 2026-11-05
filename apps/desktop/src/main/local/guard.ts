@@ -27,7 +27,14 @@ export function autoApprove(): boolean {
 /** A native consent dialog. Returns the index of the button pressed. */
 export async function ask(opts: { message: string; detail: string; buttons: string[]; cancelId: number }): Promise<number> {
   if (autoApprove()) return 0;
-  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+  // Only a VISIBLE window may own the sheet. getAllWindows()[0] could be the
+  // hidden main window or the hidden overlay, and a sheet on a hidden window is
+  // never seen: the dialog, and the tool call waiting on it, hung forever.
+  const focused = BrowserWindow.getFocusedWindow();
+  const win = (focused && focused.isVisible() ? focused : null)
+    ?? BrowserWindow.getAllWindows().find(w => !w.isDestroyed() && w.isVisible() && !w.isMinimized())
+    ?? null;
+  if (!win) app.focus({ steal: true });
   const r = win
     ? await dialog.showMessageBox(win, { type: 'question', message: opts.message, detail: opts.detail, buttons: opts.buttons, cancelId: opts.cancelId, defaultId: opts.cancelId, noLink: true })
     : await dialog.showMessageBox({ type: 'question', message: opts.message, detail: opts.detail, buttons: opts.buttons, cancelId: opts.cancelId, defaultId: opts.cancelId, noLink: true });

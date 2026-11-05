@@ -53,7 +53,10 @@ export function subscribeConversations(uid: string, cb: (convs: ConvSummary[]) =
             // Hide empty ghost chats (0 messages) — conversations are created
             // lazily on the first message, so an empty one is a stale doc.
             const hasMessages = Array.isArray(data.messages) && data.messages.length > 0;
-            return data.deleted !== true && data.briefing !== true && data.checkin !== true && hasMessages;
+            // Goal, project and task threads live on their own screens (web hides
+            // them too); opened from history they lost their scope.
+            const scoped = !!(data.goalId || data.projectId || data.taskId);
+            return data.deleted !== true && data.briefing !== true && data.checkin !== true && !scoped && hasMessages;
           })
           .map(d => ({
             id: d.id,

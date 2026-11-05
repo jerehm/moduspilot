@@ -102,14 +102,63 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   // window.open — allow those in-app; send any other external link to the
   // system browser instead of opening a rogue window.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/accounts\.google\.com|appleid\.apple\.com|firebaseapp\.com|moduspilot\.com|__\/auth/.test(url)) {
-      return { action: 'allow' };
+    // Matched on the parsed hostname. The old unanchored regex allowed any URL
+    // that merely CONTAINED "moduspilot.com" (evil.example/?moduspilot.com).
+    let u: URL | null = null;
+    try { u = new URL(url); } catch { /* not a URL */ }
+    if (!u) return { action: 'deny' };
+    const host = u.hostname;
+    const inApp = u.protocol === 'https:' && (
+      ['accounts.google.com', 'appleid.apple.com', 'moduspilot.com'].some(h => host === h || host.endsWith(`.${h}`))
+      || host.endsWith('.firebaseapp.com')
+    );
+    if (inApp) return { action: 'allow' };
+    // Only web links leave the app. file:, smb:, custom app schemes and the like
+    // from a remote page could otherwise open things on this Mac.
+    if (u.protocol === 'https:' || u.protocol === 'http:' || u.protocol === 'mailto:') {
+      shell.openExternal(url).catch((err) => log.warn('[window] openExternal failed', err));
+    } else {
+      log.warn(`[window] blocked external open of ${u.protocol} link`);
     }
-    shell.openExternal(url);
     return { action: 'deny' };
   });
 
   win.once('ready-to-show', () => win.show());
+
+  // A crashed renderer does not fire did-fail-load, so the retry below never ran
+  // and the window stayed a dead dark rectangle until the app was relaunched.
+  let crashCount = 0;
+  let crashReset: NodeJS.Timeout | null = null;
+  win.webContents.on('render-process-gone', (_e, details) => {
+    if (details.reason === 'clean-exit') return;
+    crashCount++;
+    const delay = Math.min(1000 * 2 ** (crashCount - 1), 30_000);
+    log.error(`[window] renderer gone (${details.reason}, exit ${details.exitCode}), reloading in ${delay}ms`);
+    if (crashReset) clearTimeout(crashReset);
+    crashReset = setTimeout(() => { crashCount = 0; }, 5 * 60_000);
+    setTimeout(() => {
+      if (win.isDestroyed()) return;
+      win.loadURL(splashUrl('Reconnecting…')).catch(() => {});
+      loadRemote(win);
+    }, delay);
+  });
+  // A page hung in a loop never crashes on its own. Give it 20s to recover, then
+  // crash it on purpose so the handler above reloads it.
+  let hangTimer: NodeJS.Timeout | null = null;
+  win.webContents.on('unresponsive', () => {
+    log.warn('[window] renderer unresponsive');
+    if (hangTimer) return;
+    hangTimer = setTimeout(() => {
+      hangTimer = null;
+      if (!win.isDestroyed()) {
+        log.error('[window] still unresponsive after 20s, restarting the page');
+        win.webContents.forcefullyCrashRenderer();
+      }
+    }, 20_000);
+  });
+  win.webContents.on('responsive', () => {
+    if (hangTimer) { clearTimeout(hangTimer); hangTimer = null; }
+  });
 
   // Closing the window keeps the app alive in the tray (background sync keeps
   // running). Only a real Quit (sets isQuitting) actually tears it down.

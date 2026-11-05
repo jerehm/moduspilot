@@ -149,10 +149,17 @@ interface RawDataRow {
 function snapshotNoteStore(): string {
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'modus-notes-'));
   const dest = path.join(tmpDir, 'NoteStore.sqlite');
-  fs.copyFileSync(NOTE_STORE_PATH, dest);
-  for (const suffix of ['-wal', '-shm']) {
-    const src = NOTE_STORE_PATH + suffix;
-    if (fs.existsSync(src)) fs.copyFileSync(src, dest + suffix);
+  try {
+    fs.copyFileSync(NOTE_STORE_PATH, dest);
+    for (const suffix of ['-wal', '-shm']) {
+      const src = NOTE_STORE_PATH + suffix;
+      if (fs.existsSync(src)) fs.copyFileSync(src, dest + suffix);
+    }
+  } catch (err) {
+    // A failed copy (disk full) left a partial 100MB+ copy behind on every
+    // 5 minute sync, filling the disk. The caller never learned the dir.
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best effort */ }
+    throw err;
   }
   return dest;
 }

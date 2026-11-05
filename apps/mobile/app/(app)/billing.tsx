@@ -7,18 +7,22 @@ import { db, auth } from '@/lib/firebase';
 import { DetailHeader } from '@/components/DetailHeader';
 import { Icon } from '@/components/Icon';
 import { useThemeColors } from '@/lib/theme';
-import { startCheckout, openBillingPortal } from '@/lib/api';
+import { startCheckout, openBillingPortal, changePlan } from '@/lib/api';
 import { haptics } from '@/lib/haptics';
 import type { Plan } from '@/lib/types';
 
-const TIERS: { key: Plan; name: string; price: string; tagline: string; features: string[] }[] = [
-  { key: 'modus', name: 'MODUS', price: '$24/mo', tagline: '3 days free, then $24/mo · card required', features: ['Unlimited messages', 'All integrations', 'Proactive briefings'] },
-  { key: 'pilot', name: 'PILOT', price: '$59/mo', tagline: 'For founders & executives · 3 days free', features: ['Everything in MODUS', 'Wearables, CRM, financial', 'Priority support'] },
+// Mirrors apps/web/lib/pricing.ts PLAN_PRICING. New purchases are charged at
+// checkout: there is no free trial, so none is promised here.
+const TIERS: { key: 'modus' | 'pilot'; name: string; price: string; tagline: string; features: string[] }[] = [
+  { key: 'modus', name: 'MODUS', price: '$28/mo', tagline: 'Or $280/yr. Cancel anytime.', features: ['Every provider, auto-routed', 'Higher limits than Free', 'Gmail, Outlook, Calendar and Drive', 'Daily briefings, goals and habits'] },
+  { key: 'pilot', name: 'PILOT', price: '$59/mo', tagline: 'Or $588/yr. For founders and executives.', features: ['Everything in MODUS', 'The frontier models, picked per message', 'Wearables, CRM and financial pulse', 'Priority support'] },
 ];
 
 export default function BillingScreen() {
   const c = useThemeColors();
   const [plan, setPlan] = useState<NonNullable<Plan>>('free');
+  // Group seats are paid by the group owner: not "free", and not switchable here.
+  const [isGroup, setIsGroup] = useState(false);
   const [busy, setBusy] = useState<Plan | 'portal' | null>(null);
 
   useEffect(() => {
@@ -26,20 +30,39 @@ export default function BillingScreen() {
     if (!uid) return;
     return onSnapshot(doc(db, 'users', uid), snap => {
       const p = snap.data()?.plan as string | undefined;
-      setPlan(p === 'modus' || p === 'pilot' ? p : 'free');
-    });
+      setIsGroup(p === 'group');
+      setPlan(p === 'modus' || p === 'pilot' ? p : p === 'group' ? 'pilot' : 'free');
+    }, () => { /* offline: keep the last known plan */ });
   }, []);
 
   async function upgrade(target: 'modus' | 'pilot') {
     if (busy) return;
+    if (plan !== 'free') {
+      // Changes a live subscription (Stripe prorates), so it is confirmed first.
+      const ok = await new Promise<boolean>(resolve => Alert.alert(
+        `Switch to ${target === 'pilot' ? 'PILOT' : 'MODUS'}?`,
+        'Your subscription changes now. Stripe prorates the difference on your next invoice.',
+        [{ text: 'Cancel', style: 'cancel', onPress: () => resolve(false) }, { text: 'Switch', onPress: () => resolve(true) }],
+        { cancelable: true, onDismiss: () => resolve(false) },
+      ));
+      if (!ok) return;
+    }
     haptics.medium();
     setBusy(target);
     try {
-      const url = await startCheckout(target);
-      await WebBrowser.openBrowserAsync(url);
-      // Plan updates via the Stripe webhook; the onSnapshot above reflects it.
-    } catch {
-      Alert.alert('Checkout failed', 'Could not start checkout. Please try again.');
+      if (plan === 'free') {
+        const url = await startCheckout(target);
+        await WebBrowser.openBrowserAsync(url);
+        // Plan updates via the Stripe webhook; the onSnapshot above reflects it.
+      } else {
+        await changePlan(target);
+        Alert.alert('Plan changed', `You are now on ${target === 'pilot' ? 'PILOT' : 'MODUS'}.`);
+      }
+    } catch (e) {
+      Alert.alert(
+        plan === 'free' ? 'Checkout failed' : 'Could not change plan',
+        plan === 'free' ? 'Could not start checkout. Please try again.' : (e instanceof Error ? e.message : 'Please try again.'),
+      );
     } finally {
       setBusy(null);
     }
@@ -65,8 +88,8 @@ export default function BillingScreen() {
       <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 36 }} showsVerticalScrollIndicator={false}>
         <View className="gap-4">
           {TIERS.map(t => {
-            const current = t.key === plan;
-            const canUpgrade = (t.key === 'modus' || t.key === 'pilot') && t.key !== plan;
+            const current = !isGroup && t.key === plan;
+            const canUpgrade = !isGroup && t.key !== plan;
             return (
               <View
                 key={t.key}
@@ -102,7 +125,7 @@ export default function BillingScreen() {
                     className="mt-4 rounded-xl bg-brand py-3 items-center flex-row justify-center gap-2"
                   >
                     {busy === t.key ? <ActivityIndicator color="#fff" size="small" /> : (
-                      <Text className="text-white font-semibold">{plan === 'free' ? `Start trial — ${t.name}` : `Switch to ${t.name}`}</Text>
+                      <Text className="text-white font-semibold">{plan === 'free' ? `Get ${t.name}` : `Switch to ${t.name}`}</Text>
                     )}
                   </TouchableOpacity>
                 )}
@@ -110,7 +133,13 @@ export default function BillingScreen() {
             );
           })}
 
-          {plan !== 'free' && (
+          {isGroup && (
+            <Text className="text-muted text-[13px] text-center px-4">
+              You are on a Group plan. Your group owner manages billing.
+            </Text>
+          )}
+
+          {plan !== 'free' && !isGroup && (
             <TouchableOpacity
               onPress={manage}
               disabled={!!busy}

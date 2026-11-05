@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { canonicalModelId } from '@/lib/models';
 import { router } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db, auth } from '@/lib/firebase';
@@ -14,7 +15,7 @@ import { getSettings, saveSettings, currentUid, type UserSettings } from '@/lib/
 type Provider = 'platform' | 'openai' | 'anthropic';
 
 const TTS_VOICES: { id: string; name: string; desc: string }[] = [
-  { id: 'onyx',    name: 'Onyx',    desc: 'Deep and authoritative — default for MODUS' },
+  { id: 'onyx',    name: 'Onyx',    desc: 'Deep and authoritative, default for MODUS' },
   { id: 'alloy',   name: 'Alloy',   desc: 'Neutral and balanced' },
   { id: 'echo',    name: 'Echo',    desc: 'Warm and natural' },
   { id: 'fable',   name: 'Fable',   desc: 'Expressive and articulate' },
@@ -28,7 +29,7 @@ const BRAINS = [
     name: 'Auto',
     provider: 'MODUS routing',
     tagline: 'Best model for every task',
-    desc: "MODUS routes each message to the model that'll do it best — Claude for writing and analysis, a reasoning model for code and math, real-time models for research, and fast Llama for everyday. Auto only uses the models your plan unlocks.",
+    desc: "MODUS routes each message to the model that'll do it best, Claude for writing and analysis, a reasoning model for code and math, real-time models for research, and fast Llama for everyday. Auto only uses the models your plan unlocks.",
     badge: 'Recommended',
     badgeClass: 'bg-brand text-white',
     plans: ['free', 'modus', 'pilot'],
@@ -117,9 +118,9 @@ const BRAINS = [
     id: 'claude-opus-5-5',
     name: 'Claude Opus 5.5',
     provider: 'Anthropic',
-    // NOT "most capable" any more — Fable 5 below is. Both are on this screen.
+    // NOT "most capable" any more: Fable 5.1 below is. Both are on this screen.
     tagline: 'Deep reasoning, faster',
-    desc: 'Highly capable and quicker to answer than Fable 5.',
+    desc: 'Highly capable and quicker to answer than Fable 5.1.',
     badge: 'PILOT',
     badgeClass: 'bg-brand/10 text-brand',
     plans: ['pilot'],
@@ -204,8 +205,9 @@ export default function BrainScreen() {
     if (!uid) return;
     const unsub = onSnapshot(doc(db, 'users', uid), snap => {
       const p = snap.data()?.plan as string | undefined;
-      setPlan(p === 'modus' || p === 'pilot' ? p : 'free');
-    });
+      // Group seats carry PILOT access; 'group' read as free locked every PILOT brain.
+      setPlan(p === 'modus' || p === 'pilot' ? p : p === 'group' ? 'pilot' : 'free');
+    }, () => { /* offline: keep the last known plan */ });
     getSettings(uid).then(s => {
       setSettings(s);
       if (s.ttsVoice) setTtsVoice(s.ttsVoice);
@@ -216,7 +218,7 @@ export default function BrainScreen() {
         const prov = BYOK_PROVIDERS.find(p => p.key === m.provider)!;
         setByokModel(m.model ?? prov.models[0].id);
       } else {
-        const brain = BRAINS.find(b => b.id === m.model);
+        const brain = BRAINS.find(b => b.id === canonicalModelId(m.model ?? ''));
         setPlatformModel(brain?.id ?? 'auto');
       }
       setOpenaiKey(m.openaiKey ?? '');

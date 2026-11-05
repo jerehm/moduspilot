@@ -236,7 +236,17 @@ export function readToolAnnotations(m: unknown): { calls: ToolCallRecord[]; serv
     for (const a of anns) {
       if (!a || typeof a !== 'object') continue;
       const o = a as Record<string, unknown>;
-      if (Array.isArray(o.modusTools)) calls = o.modusTools as ToolCallRecord[];
+      // Saved records come back from Firestore unchecked; a record from an older
+      // build (no media, no tool name) crashed MediaGrid and humanTool on reload.
+      if (Array.isArray(o.modusTools)) {
+        calls = (o.modusTools as unknown[])
+          .filter((r): r is Record<string, unknown> => !!r && typeof r === 'object' && typeof (r as { id?: unknown }).id === 'string')
+          .map(r => ({
+            ...(r as unknown as ToolCallRecord),
+            tool: typeof r.tool === 'string' ? r.tool : 'tool',
+            media: Array.isArray(r.media) ? (r.media as unknown[]).filter(x => !!x && typeof x === 'object') as ToolMedia[] : [],
+          }));
+      }
       if (o.modusToolServers && typeof o.modusToolServers === 'object') servers = o.modusToolServers as Record<string, string>;
       if (o.modusToolUi && typeof o.modusToolUi === 'object') ui = o.modusToolUi as Record<string, ToolUiRef>;
     }

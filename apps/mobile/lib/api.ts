@@ -281,11 +281,11 @@ export async function* streamChat(
       clearTimeout(timer);
     }
     const { done, value } = result;
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
+    // On done, flush what is left instead of breaking at once: a final `3:`
+    // error or `0:` text line with no trailing newline used to be dropped.
+    buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
+    buffer = done ? '' : (lines.pop() ?? '');
 
     for (const line of lines) {
       // Vercel AI SDK data stream: lines like `0:"text chunk"`
@@ -329,6 +329,7 @@ export async function* streamChat(
         throw new Error(token);
       }
     }
+    if (done) break;
   }
 }
 
@@ -346,7 +347,24 @@ async function postForUrl(path: string, body?: unknown): Promise<string> {
 }
 
 /** Stripe Checkout URL for a plan upgrade. */
-export const startCheckout = (plan: 'modus' | 'pilot' | 'group') => postForUrl('/api/stripe/checkout', { plan });
+export const startCheckout = (plan: 'modus' | 'pilot', cadence: 'monthly' | 'annual' = 'monthly') =>
+  postForUrl('/api/stripe/checkout', { plan, cadence });
+
+/**
+ * Move an existing subscription to another plan. Checkout refuses a user who
+ * already pays (409 has_subscription), so a paying MODUS user tapping "Switch to
+ * PILOT" always failed. Same route the web billing settings use.
+ */
+export async function changePlan(plan: 'modus' | 'pilot'): Promise<void> {
+  const headers = await getAuthHeader();
+  const res = await fetch(`${API_BASE}/api/stripe/change-plan`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify({ plan }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(typeof data.error === 'string' ? data.error : `Request failed (${res.status})`);
+}
 /** Stripe billing-portal URL (manage/cancel). */
 export const openBillingPortal = () => postForUrl('/api/stripe/portal');
 

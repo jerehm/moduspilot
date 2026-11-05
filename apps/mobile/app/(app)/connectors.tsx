@@ -200,7 +200,7 @@ export default function ConnectorsScreen() {
     const file = await pickTextFile();
     if (!file) return;
     const preview = file.content.slice(0, 2000);
-    const prompt = `I'm sharing a file with you: "${file.name}"\n\n${preview}${file.content.length > 2000 ? '\n\n[File truncated — ask me to share more if needed]' : ''}`;
+    const prompt = `I'm sharing a file with you: "${file.name}"\n\n${preview}${file.content.length > 2000 ? '\n\n[File truncated, ask me to share more if needed]' : ''}`;
     router.push({ pathname: '/(app)/(tabs)/chat', params: { prefill: prompt } });
   }
 

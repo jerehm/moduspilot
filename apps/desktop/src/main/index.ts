@@ -10,7 +10,7 @@ import { getAuthState } from './sync/ingest';
 import { pollNotifications } from './notifications';
 import { initAutoUpdate } from './updater';
 import { registerLocalIpc } from './local/ipc';
-import { stopAll as stopLocalMcp } from './local/mcp';
+import { stopAll as stopLocalMcp, hasRunning as localMcpRunning } from './local/mcp';
 
 
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;    // background sync cadence
@@ -24,13 +24,23 @@ if (!app.isPackaged && process.env.MODUS_TEST_USER_DATA) {
 }
 
 log.initialize();
+// Last line of defence. Without these a stray throw anywhere in main showed
+// Electron's "A JavaScript error occurred" dialog (often at login) and nothing
+// reached the log. Logged, never shown; the app keeps running.
+log.errorHandler.startCatching({ showDialog: false });
+process.on('unhandledRejection', (reason) => log.error('[main] unhandled rejection', reason));
 log.info('[main] starting MODUS Desktop');
 
 // Single instance — a second launch just focuses the existing window.
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
-  app.on('second-instance', () => showMainWindow());
+  // If the window failed to build earlier, a relaunch must bring one back, not
+  // silently do nothing.
+  app.on('second-instance', () => {
+    if (getMainWindow()) showMainWindow();
+    else createMainWindow().catch((err) => log.error('[main] re-create window failed', err));
+  });
 
   // Anything that throws in here used to take the whole app down silently: the
   // .then() had no .catch(), so the rejection vanished and everything after the
@@ -138,10 +148,15 @@ if (!app.requestSingleInstanceLock()) {
     // Local MCP servers are child processes; none may outlive the app. The
     // SDK's close() waits on the child, so quitting is held until they are
     // down (3s at most), then resumed.
-    if (!mcpStopped) {
+    // Only hold the quit when there is something to stop. Holding it every time
+    // answered macOS's terminate request with "cancel", which can block log out
+    // and shutdown ("MODUS Desktop canceled log out").
+    if (!mcpStopped && localMcpRunning()) {
       e.preventDefault();
       mcpStopped = true;
-      void Promise.race([stopLocalMcp(), new Promise(r => setTimeout(r, 3000))]).finally(() => app.quit());
+      void Promise.race([stopLocalMcp(), new Promise(r => setTimeout(r, 3000))])
+        .catch((err) => log.error('[main] stopping local servers failed', err))
+        .finally(() => app.quit());
     }
     // A global shortcut is registered with the OS, not with the app. Leaving it
     // behind means the combo stays swallowed system-wide after MODUS is gone.

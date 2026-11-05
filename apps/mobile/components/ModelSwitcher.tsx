@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { ProviderLogo } from '@/components/BrandLogo';
 import { useThemeColors } from '@/lib/theme';
-import { PLATFORM_MODELS, effectivePlan, modelName } from '@/lib/models';
+import { effectivePlan, modelName, canonicalModelId, sortedModels } from '@/lib/models';
 
 interface Props {
   /** 'auto' | a model id | 'default' (BYOK) */
@@ -85,9 +85,9 @@ export function ModelSwitcher({ value, onChange, plan }: Props) {
                 {isSaver && <Icon name="check" size={18} color={c.brand} />}
               </TouchableOpacity>
 
-              {PLATFORM_MODELS.map(m => {
+              {sortedModels(ep).map(m => {
                 const locked = !m.plans.includes(ep);
-                const selected = value === m.id;
+                const selected = canonicalModelId(value ?? '') === m.id;
                 return (
                   <TouchableOpacity
                     key={m.id}

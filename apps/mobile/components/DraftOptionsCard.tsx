@@ -25,14 +25,17 @@ export function DraftOptionsCard({ raw, onSend }: { raw: string; onSend: (text: 
 
   let data: DraftOptionsPayload;
   try { data = JSON.parse(raw); } catch { return null; }
-  const options = data.options ?? [];
+  // JSON.parse("null") succeeds, and data.options then threw.
+  if (!data || typeof data !== 'object') return null;
+  const options = (Array.isArray(data.options) ? data.options : [])
+    .filter(o => o && typeof o === 'object' && typeof o.label === 'string');
   const isCustom = selected === options.length;
   const canSubmit = selected !== null && (!isCustom || custom.trim().length > 0);
 
   function generate() {
     if (!canSubmit) return;
     haptics.medium();
-    const direction = isCustom ? custom.trim() : `${options[selected!].label} — ${options[selected!].detail}`;
+    const direction = isCustom ? custom.trim() : `${options[selected!].label}, ${options[selected!].detail}`;
     setSubmittedLabel(isCustom ? custom.trim() : options[selected!].label);
     setSubmitted(true);
     const ctx = data.from ? ` to ${data.from}` : '';
