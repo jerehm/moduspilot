@@ -1,9 +1,13 @@
+jerehm.com · instagram.com/jerehm (13.8k followers)
+
 # MODUS Business Plan
 
 **Short-term plan (next 12 months) and 3 to 5 year plan**
 
 Prepared for Richard Latta, Post Oak Group. November 2026.
 Jeremiah Diana, Founder. jeremiah@moduspilot.com. moduspilot.com
+
+**Gross margin per paying user: about 85% on average** ($28 price minus $1.11 card processing and about $3 AI cost). Section 6 shows the math.
 
 All forward-looking figures in this document are projections. Each one is built from the assumptions printed next to it. None of them are results.
 
