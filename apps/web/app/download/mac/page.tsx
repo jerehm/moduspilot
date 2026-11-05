@@ -9,7 +9,7 @@ import { AppleLogo } from '@/components/marketing/BrandLogos';
 
 // Version-less filenames (artifactName in apps/desktop/electron-builder.yml), so
 // these URLs keep resolving to the newest build without a code change here.
-const BASE = 'https://github.com/jeremiahdiana/moduspilot/releases/latest/download';
+const BASE = 'https://github.com/jerehm/moduspilot/releases/latest/download';
 const BUILDS = {
   arm64: { url: `${BASE}/MODUS-Desktop-arm64.dmg`, label: 'Apple Silicon', sub: 'M1, M2, M3, M4' },
   x64:   { url: `${BASE}/MODUS-Desktop-x64.dmg`,   label: 'Intel',         sub: '2020 or earlier' },

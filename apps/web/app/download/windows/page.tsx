@@ -10,7 +10,7 @@ import { WindowsLogo } from '@/components/marketing/BrandLogos';
 // Version-less filename (artifactName in apps/desktop/electron-builder.yml) so
 // this URL keeps resolving to the newest build. Produced by the windows-latest
 // GitHub Actions job — Windows installers can't be built on macOS.
-const EXE_URL = 'https://github.com/jeremiahdiana/moduspilot/releases/latest/download/MODUS-Desktop-x64.exe';
+const EXE_URL = 'https://github.com/jerehm/moduspilot/releases/latest/download/MODUS-Desktop-x64.exe';
 
 const STEPS = [
   { n: '1', title: 'Run the installer', body: 'Open MODUS-Desktop-x64.exe from your Downloads.' },

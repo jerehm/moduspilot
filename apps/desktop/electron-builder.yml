@@ -56,5 +56,5 @@ nsis:
 # Auto-update + release artifacts go to GitHub Releases on the repo.
 publish:
   provider: github
-  owner: jeremiahdiana
+  owner: jerehm
   repo: moduspilot
