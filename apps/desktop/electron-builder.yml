@@ -10,6 +10,10 @@ artifactName: MODUS-Desktop-${arch}.${ext}
 files:
   - dist/**/*
   - assets/**/*
+# Refuses a Mac build that macOS would kill on launch (restricted entitlement
+# without a provisioning profile, or the signed binary dying at exec). 0.3.2 to
+# 0.4.2 all shipped that way. See scripts/verify-signed-app.js.
+afterSign: scripts/verify-signed-app.js
 mac:
   category: public.app-category.productivity
   icon: assets/icon.icns

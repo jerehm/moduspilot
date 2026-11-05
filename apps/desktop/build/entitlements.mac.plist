@@ -10,13 +10,9 @@
   <!-- Needed so the app can load its native module (better-sqlite3). -->
   <key>com.apple.security.cs.disable-library-validation</key>
   <true/>
-  <!-- Touch ID / Secure Enclave platform authenticator for WebAuthn (passkeys)
-       inside the login window's Google/Apple OAuth flow. Must exactly match the
-       keychainAccessGroup passed to app.configureWebAuthn() in src/main/index.ts.
-       Form is <TEAM_ID>.<BUNDLE_ID>.webauthn. -->
-  <key>keychain-access-groups</key>
-  <array>
-    <string>8KF5J7X9BU.com.moduspilot.desktop.webauthn</string>
-  </array>
+  <!-- NO keychain-access-groups. It is a restricted entitlement: on a Developer
+       ID app without an embedded provisioning profile the kernel kills the app
+       at launch (0.3.2 to 0.4.2 all died this way). scripts/verify-signed-app.js
+       enforces it. See the Touch ID note in src/main/index.ts. -->
 </dict>
 </plist>
