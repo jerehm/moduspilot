@@ -43,6 +43,7 @@ The company is me, full time. I build the product and run distribution.
 
 | Quarter | Milestones |
 |---|---|
+| Now (November 2026) | Meta ads go live on Instagram and Facebook this month as the lead acquisition channel, ahead of the plan year. Ad landing pages and signup tracking set up so every ad is measured to signup and paid. |
 | Q1 (Dec to Feb) | iOS approval and public App Store launch. Keep the model catalog current within two weeks of each major model release. Onboarding pass on web and mobile so a new user gets a useful answer in the first minute. |
 | Q2 (Mar to May) | Android app built from the same codebase as iOS, submitted to Google Play. Referral credit inside the app. Usage reporting so I can see cost per user each month instead of estimating it. |
 | Q3 (Jun to Aug) | Teams plan beta: shared billing, seats and shared projects for small companies. Windows desktop at feature parity with Mac, including Screen Assist. |
@@ -54,8 +55,8 @@ Every channel is measured on the same funnel: visit, signup, first answer, paid.
 
 | Channel | What I will do | Target over 12 months |
 |---|---|---|
-| Agency creators and clients | I run an agency that works with creators and clients. Paid and affiliate placements with creators whose audiences already use AI tools. | 8 to 12 creator placements per quarter. Largest single source of signups. |
-| Paid ads (Meta first) | Small weekly tests on Instagram and Facebook. Kill any ad that does not produce signups at or under target cost within two weeks. | Cost per signup under $4 before scaling spend. |
+| Paid ads, Meta (lead channel) | Live from November 2026. Many ad creatives running on Instagram and Facebook at once, new ones every week. Budget moves to the ads that turn into paying users and anything that misses target cost is cut within two weeks. | Cost per signup under $4. Largest single source of signups. |
+| Agency creators and clients | I run an agency that works with creators and clients. Paid and affiliate placements with creators whose audiences already use AI tools. | 8 to 12 creator placements per quarter. |
 | Affiliates | Commission on paid conversions through tracked codes. Recruit from creators, newsletter writers and power users. | 25 active affiliates by Q4. |
 | SEO and blog | Comparison pages and guides people search before choosing an AI tool. Two to four pieces a month. | 15 percent of signups from search by Q4. |
 | App Store launch | iOS launch in Q1, Android in Q2. Store listing tuned for search inside the stores. | Store installs tracked as their own channel from launch. |
@@ -83,7 +84,7 @@ Spend is split by category. The split holds whatever the amount raised.
 
 | Category | Share | What it pays for |
 |---|---|---|
-| Distribution | 28% | Creator placements, ad tests, affiliate payouts |
+| Distribution | 28% | Meta ads, creator placements, affiliate payouts |
 | Product and engineering | 20% | Android build, contract help, design |
 | Infrastructure | 16% | Hosting, database, auth, email |
 | Model usage | 12% | AI provider bills for free and paid users |
@@ -91,7 +92,7 @@ Spend is split by category. The split holds whatever the amount raised.
 | Legal and accounting | 7% | Entity, terms, app store and tax compliance |
 | Reserve | 5% | Held for a model price spike or a bad month |
 
-Monthly burn is kept flat and low on purpose. Distribution spend only goes up when a channel shows it can turn spend into paying users at a cost the margins below can carry.
+Meta ads are funded by the founder starting November 2026, before the plan year begins. Monthly burn is otherwise kept flat and low on purpose. Distribution spend only goes up when a channel shows it can turn spend into paying users at a cost the margins below can carry.
 
 ## 6. Unit economics today (estimates)
 
@@ -112,7 +113,7 @@ The ceiling is enforced by the product, so even the heaviest possible user does 
 
 | Quarter | Product | Distribution | Base case target |
 |---|---|---|---|
-| Q1 | iOS live, onboarding pass | Creator placements start, first ad tests | 1,200 signups, 58 paying |
+| Q1 | iOS live, onboarding pass | Meta ads scaled on November results, creator placements start | 1,200 signups, 58 paying |
 | Q2 | Android submitted, referrals | Affiliate program open, SEO cadence set | 3,300 signups, 153 paying |
 | Q3 | Teams beta, Windows parity | Scale the best two channels | 6,300 signups, 279 paying |
 | Q4 | Teams live, localized pricing | Cut channels that miss cost targets | 10,200 signups, 435 paying |
