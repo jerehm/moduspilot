@@ -18,6 +18,15 @@ contextBridge.exposeInMainWorld('modusDesktop', {
   auth: {
     signInWithBrowser: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('auth:browser:start'),
     cancel: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('auth:browser:cancel'),
+    // Lets the page restore its waiting screen after a reload.
+    status: (): Promise<{ pending: boolean; expiresAt: number | null }> => ipcRenderer.invoke('auth:browser:status'),
+    // Fires when a browser sign-in ends WITHOUT signing in (cancelled, timed out).
+    // Returns an unsubscribe function.
+    onEnded: (cb: (reason: string) => void) => {
+      const fn = (_e: unknown, reason: string) => cb(reason);
+      ipcRenderer.on('auth:browser:ended', fn);
+      return () => { ipcRenderer.removeListener('auth:browser:ended', fn); };
+    },
   },
   toolDefs: () => call('local:toolDefs'),
   callTool: (name: string, args: unknown) => call('local:callTool', name, args),

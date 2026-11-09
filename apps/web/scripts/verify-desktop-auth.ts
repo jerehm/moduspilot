@@ -95,6 +95,32 @@ async function main() {
   check('an expired code is refused', r.status === 400, String(r.status));
   check('an expired code is deleted', !(await ref.get()).exists);
 
+  // --- App polling (the path that works even if the browser never opens the link)
+  const st = randomBytes(32).toString('base64url');
+  r = await post('/api/desktop/auth-poll', { state: st });
+  check('poll before the browser finished says pending', r.ok && (await r.json() as { pending?: boolean }).pending === true, String(r.status));
+  r = await post('/api/desktop/auth-code', { state: st }, idToken);
+  const first = (await r.json() as { code: string }).code;
+  r = await post('/api/desktop/auth-code', { state: st }, idToken); // a second tab, same state
+  const second = (await r.json() as { code: string }).code;
+  r = await post('/api/desktop/auth-poll', { state: st });
+  const polled = (await r.json() as { code?: string }).code;
+  check('poll hands over the LATEST code for the state', polled === second && polled !== first);
+  r = await post('/api/desktop/auth-poll', { state: st });
+  check('poll hands a code over only once', (await r.json() as { pending?: boolean }).pending === true);
+  r = await post('/api/desktop/auth-exchange', { code: polled });
+  check('the polled code signs in', r.ok && !!(await r.json() as { token?: string }).token, String(r.status));
+  r = await post('/api/desktop/auth-poll', { state: randomBytes(32).toString('base64url') });
+  check('a different state gets nothing', (await r.json() as { pending?: boolean }).pending === true);
+  r = await post('/api/desktop/auth-poll', { state: 'nope' });
+  check('a malformed state is refused', r.status === 400, String(r.status));
+  const staleState = randomBytes(32).toString('base64url');
+  const sref = getFirestore(app()).collection('desktopAuthStates').doc(createHash('sha256').update(`state:${staleState}`).digest('hex'));
+  await sref.set({ code: stale, createdAt: Date.now() - 180_000, expiresAt: Date.now() - 60_000 });
+  r = await post('/api/desktop/auth-poll', { state: staleState });
+  check('an expired mailbox gives nothing', (await r.json() as { pending?: boolean }).pending === true);
+  check('an expired mailbox is deleted', !(await sref.get()).exists);
+
   console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
   process.exit(failed ? 1 : 0);
 }

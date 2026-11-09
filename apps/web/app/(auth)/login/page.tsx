@@ -69,7 +69,13 @@ const EMAIL_KEY = 'modus-email-for-signin';
 // MODUS Desktop 0.4.5+ exposes this. It opens sign-in in the user's real
 // browser, where their passkeys, Touch ID and saved logins work (an app window
 // can't reach them). Older desktop builds lack it and keep the popup buttons.
-type DesktopAuthBridge = { signInWithBrowser: () => Promise<{ ok: boolean; error?: string }>; cancel: () => Promise<unknown> };
+type DesktopAuthBridge = {
+  signInWithBrowser: () => Promise<{ ok: boolean; error?: string }>;
+  cancel: () => Promise<unknown>;
+  // Desktop builds after the first browser sign-in build (same release) have these.
+  status?: () => Promise<{ pending: boolean }>;
+  onEnded?: (cb: (reason: string) => void) => () => void;
+};
 function desktopAuth(): DesktopAuthBridge | null {
   if (typeof window === 'undefined') return null;
   const b = (window as unknown as { modusDesktop?: { auth?: DesktopAuthBridge } }).modusDesktop?.auth;
@@ -124,6 +130,19 @@ export default function LoginPage() {
     signInWithEmailLink(auth, addr, window.location.href)
       .then(() => { try { localStorage.removeItem(EMAIL_KEY); } catch { /* ignore */ } })
       .catch(() => setError('That sign in link is invalid or expired. Please try again.'));
+  }, []);
+
+  // Desktop: a browser sign-in may already be running (the page reloaded, or the
+  // window was reopened), so pick the waiting screen back up. And reset it the
+  // moment the app says that sign-in ended without signing in.
+  useEffect(() => {
+    const b = desktopAuth();
+    if (!b) return;
+    b.status?.().then((st) => { if (st.pending) setWaiting(true); }).catch(() => {});
+    return b.onEnded?.((reason) => {
+      setWaiting(false);
+      setError(reason === 'timed-out' ? 'Sign in timed out. Please try again.' : '');
+    });
   }, []);
 
   // If already signed in, skip straight to the app

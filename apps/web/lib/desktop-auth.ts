@@ -14,9 +14,16 @@ import { createHash, randomBytes } from 'crypto';
  * IT started, loads /desktop/complete?code=C, which trades the code at
  * /api/desktop/auth-exchange for a Firebase custom token.
  *
- * Only a SHA-256 of the code is stored, it lives 2 minutes and works once.
+ * The modusdesktop:// link is only a shortcut. Browsers may block it, ask about
+ * it, or the user may close the tab, so the app ALSO polls /api/desktop/auth-poll
+ * with its state and receives the same code from there. Whichever comes first
+ * wins; the app finishes once.
+ *
+ * Only SHA-256 hashes of codes and states are stored. A code lives 2 minutes
+ * and works once; the state's mailbox lives as long as the code.
  */
 export const AUTH_CODE_COLLECTION = 'desktopAuthCodes';
+export const AUTH_STATE_COLLECTION = 'desktopAuthStates';
 export const AUTH_CODE_TTL_MS = 2 * 60 * 1000;
 
 // 32 random bytes as base64url = 43 chars. Both the code and the desktop's state.
@@ -28,4 +35,8 @@ export function newCode(): string {
 
 export function codeId(code: string): string {
   return createHash('sha256').update(code).digest('hex');
+}
+
+export function stateId(state: string): string {
+  return createHash('sha256').update(`state:${state}`).digest('hex');
 }
