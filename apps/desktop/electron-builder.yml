@@ -14,13 +14,24 @@ files:
 # without a provisioning profile, or the signed binary dying at exec). 0.3.2 to
 # 0.4.2 all shipped that way. See scripts/verify-signed-app.js.
 afterSign: scripts/verify-signed-app.js
+# Browser sign-in hands back to the app through modusdesktop://auth (src/main/auth.ts).
+# The iOS app owns modus://, so this is a separate scheme.
+protocols:
+  - name: MODUS Desktop
+    schemes: [modusdesktop]
 mac:
   category: public.app-category.productivity
   icon: assets/icon.icns
   hardenedRuntime: true
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
-  entitlementsInherit: build/entitlements.mac.plist
+  # Helpers (GPU, renderer, plugin) get the plain set. Only the main app claims
+  # the profile-backed keys below, so no helper asks for something it isn't granted.
+  entitlementsInherit: build/entitlements.mac.inherit.plist
+  # Developer ID profile for com.moduspilot.desktop (team 8KF5J7X9BU, created
+  # 2026-11-08, expires 2044). It is what makes keychain-access-groups legal on a
+  # Developer ID app. WITHOUT IT macOS kills the app at launch (0.3.2 to 0.4.2).
+  provisioningProfile: build/modus-developer-id.provisionprofile
   # Notarization (notarytool) — credentials from env: APPLE_ID,
   # APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID.
   notarize: true

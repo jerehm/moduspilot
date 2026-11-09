@@ -64,6 +64,63 @@ function launchProbe(app) {
   });
 }
 
+// Decodes Contents/embedded.provisionprofile (a CMS-signed plist). Only the
+// fields the check needs are pulled out: the whole plist has <date> and <data>
+// values, which plutil refuses to convert to JSON.
+function profileOf(app) {
+  const file = path.join(app, 'Contents/embedded.provisionprofile');
+  if (!existsSync(file)) return null;
+  try {
+    const xml = execFileSync('security', ['cms', '-D', '-i', file], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    const pick = (key, fmt) => execFileSync('plutil', ['-extract', key, fmt, '-o', '-', '-'], { input: xml, encoding: 'utf8' }).trim();
+    return {
+      Name: pick('Name', 'raw'),
+      TeamIdentifier: [pick('TeamIdentifier.0', 'raw')],
+      ExpirationDate: pick('ExpirationDate', 'raw'),
+      Entitlements: JSON.parse(pick('Entitlements', 'json')),
+    };
+  } catch (e) {
+    return { _error: e.message };
+  }
+}
+
+// The app's own signed entitlements as JSON (strings and string arrays only).
+function entitlementJson(app) {
+  try {
+    const xml = execFileSync('codesign', ['-d', '--entitlements', ':-', app], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    if (!xml.trim()) return {};
+    return JSON.parse(execFileSync('plutil', ['-convert', 'json', '-r', '-o', '-', '-'], { input: xml, encoding: 'utf8' }));
+  } catch {
+    return {};
+  }
+}
+
+// "8KF5J7X9BU.*" in a profile allows "8KF5J7X9BU.anything".
+function allowedBy(value, patterns) {
+  return [].concat(patterns || []).some((p) =>
+    p === value || (p.endsWith('*') && value.startsWith(p.slice(0, -1))));
+}
+
+// A profile only keeps the app alive if it grants every restricted key the app
+// claims, with matching values, and has not expired. An embedded but WRONG
+// profile is killed at launch just like a missing one.
+function checkProfile(app, problems) {
+  const prof = profileOf(app);
+  if (!prof) return;
+  if (prof._error) { problems.push(`embedded.provisionprofile could not be decoded: ${prof._error}`); return; }
+  if (new Date(prof.ExpirationDate) < new Date()) problems.push(`provisioning profile "${prof.Name}" expired ${prof.ExpirationDate}`);
+  const granted = prof.Entitlements || {};
+  const ents = entitlementJson(app);
+  for (const key of RESTRICTED) {
+    if (!(key in ents)) continue;
+    if (!(key in granted)) { problems.push(`entitlement "${key}" is not granted by profile "${prof.Name}"`); continue; }
+    for (const v of [].concat(ents[key])) {
+      if (!allowedBy(v, granted[key])) problems.push(`entitlement ${key}=${v} is not allowed by the profile (${[].concat(granted[key]).join(', ')})`);
+    }
+  }
+  console.log(`[verify-signed-app] profile "${prof.Name}" (${prof.TeamIdentifier?.[0]}, expires ${prof.ExpirationDate}) checked`);
+}
+
 async function verify(app, arch) {
   const problems = [];
   const ents = entitlementsOf(app);
@@ -75,6 +132,7 @@ async function verify(app, arch) {
       }
     }
   }
+  checkProfile(app, problems);
 
   if (!arch || arch === process.arch) {
     const r = await launchProbe(app);

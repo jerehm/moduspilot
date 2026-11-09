@@ -10,8 +10,13 @@ import { getAuthState } from './sync/ingest';
 import { pollNotifications } from './notifications';
 import { initAutoUpdate } from './updater';
 import { registerLocalIpc } from './local/ipc';
+import { AUTH_SCHEME, handleAuthUrl, isAuthUrl, registerAuthIpc } from './auth';
 import { stopAll as stopLocalMcp, hasRunning as localMcpRunning } from './local/mcp';
 
+// Keychain access group for the Touch ID WebAuthn authenticator. MUST stay byte-
+// for-byte identical to the keychain-access-groups entry in
+// build/entitlements.mac.plist, or macOS rejects the keychain item at runtime.
+const WEBAUTHN_KEYCHAIN_GROUP = '8KF5J7X9BU.com.moduspilot.desktop.webauthn';
 
 const SYNC_INTERVAL_MS = 5 * 60 * 1000;    // background sync cadence
 const AUTH_POLL_MS = 60 * 1000;            // how often we re-check sign-in state
@@ -37,10 +42,29 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   // If the window failed to build earlier, a relaunch must bring one back, not
   // silently do nothing.
-  app.on('second-instance', () => {
+  app.on('second-instance', (_e, argv) => {
+    // Windows (and Linux) deliver a modusdesktop:// link as an argument to a
+    // second launch. macOS uses open-url below instead.
+    const link = argv.find(isAuthUrl);
+    if (link) { void openAuthLink(link); return; }
     if (getMainWindow()) showMainWindow();
     else createMainWindow().catch((err) => log.error('[main] re-create window failed', err));
   });
+
+  // Browser sign-in returns here (main/auth.ts). open-url can fire BEFORE ready
+  // when the link itself launched the app, so it is registered now and the
+  // link waits for ready.
+  app.on('open-url', (event, url) => {
+    event.preventDefault();
+    if (isAuthUrl(url)) void openAuthLink(url);
+  });
+  // macOS registers the scheme from Info.plist (electron-builder protocols).
+  // Windows needs it at runtime. Never in dev: that would point the scheme at
+  // the bare Electron binary instead of the installed app.
+  if (app.isPackaged && process.platform !== 'darwin') app.setAsDefaultProtocolClient(AUTH_SCHEME);
+  // A cold launch on Windows carries the link in this process's own argv.
+  const launchLink = process.argv.find(isAuthUrl);
+  if (launchLink) void openAuthLink(launchLink);
 
   // Anything that throws in here used to take the whole app down silently: the
   // .then() had no .catch(), so the rejection vanished and everything after the
@@ -48,6 +72,7 @@ if (!app.requestSingleInstanceLock()) {
   // it is why a laptop that woke with no network sat on a white window for days.
   app.whenReady().then(async () => {
     registerLocalIpc();
+    registerAuthIpc();
     // Test runs (unpackaged + MODUS_TEST_NO_SYNC=1) sign the window into a TEST
     // account. Sync would then upload this Mac's real Notes, Messages and
     // Contacts into it, so none of the background agents start.
@@ -55,19 +80,19 @@ if (!app.requestSingleInstanceLock()) {
     if (testRun) log.warn('[main] test run: sync, login item, updater and notifications are OFF');
     if (!testRun) initLaunchAtLogin();
 
-    // 🚨 TOUCH ID PASSKEYS ARE OFF, AND THAT IS WHAT KEEPS THE APP LAUNCHING.
-    // 0.3.2 to 0.4.2 called app.configureWebAuthn({ touchID }) and signed with a
-    // `keychain-access-groups` entitlement. On a Developer ID app that entitlement
-    // is RESTRICTED: it is only honoured with an embedded provisioning profile
-    // that grants it, and without one the kernel SIGKILLs the process at exec.
-    // Every one of those releases passed codesign, notarization and Gatekeeper
-    // and then died instantly on every Mac with "The application can't be
-    // opened" (exit 137). To bring Touch ID back: create a Developer ID
-    // provisioning profile with the keychain sharing capability, set
-    // mac.provisioningProfile in electron-builder.yml, restore the entitlement
-    // and this call. scripts/verify-signed-app.js blocks a release that
-    // carries the entitlement without the profile.
+    // Touch ID passkeys. Sign-in is Google/Apple OAuth in the login window, and
+    // their pages use WebAuthn for passkeys. Electron does NOT service the macOS
+    // Touch ID authenticator until configureWebAuthn is called. The OAuth popup
+    // has no partition, so it inherits the default session this configures.
+    // Passkeys made here are device-bound (not iCloud-synced).
+    //
+    // 🚨 This needs the keychain-access-groups entitlement, which is RESTRICTED:
+    // it only works because build/modus-developer-id.provisionprofile is
+    // embedded (electron-builder.yml mac.provisioningProfile). 0.3.2 to 0.4.2
+    // shipped the entitlement with NO profile and macOS killed the app at launch
+    // on every Mac. scripts/verify-signed-app.js refuses that build.
     if (process.platform === 'darwin') {
+      app.configureWebAuthn({ touchID: { keychainAccessGroup: WEBAUTHN_KEYCHAIN_GROUP } });
       // Without a handler, a request that resolves multiple discoverable
       // passkeys pends forever. Single-account is the common case here, so pick
       // the first; a real picker UI can come later.
@@ -169,4 +194,13 @@ if (!app.requestSingleInstanceLock()) {
   // Tray app: closing the window hides it (handled in windows.ts), so this is a
   // no-op guard — never quit just because no window is visible.
   app.on('window-all-closed', () => { /* keep running in the tray */ });
+}
+
+async function openAuthLink(url: string): Promise<void> {
+  try {
+    await app.whenReady();
+    await handleAuthUrl(url);
+  } catch (err) {
+    log.error('[auth] handling sign-in link failed', err);
+  }
 }

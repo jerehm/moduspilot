@@ -12,7 +12,13 @@ type Result<T> = Promise<{ ok: true; value: T } | { ok: false; error: string }>;
 const call = <T>(channel: string, ...args: unknown[]): Result<T> => ipcRenderer.invoke(channel, ...args);
 
 contextBridge.exposeInMainWorld('modusDesktop', {
-  bridgeVersion: 1,
+  bridgeVersion: 2,
+  // Sign in through the user's browser (passkeys, Touch ID, saved logins).
+  // main/auth.ts. The /login page shows its browser button only when this exists.
+  auth: {
+    signInWithBrowser: (): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('auth:browser:start'),
+    cancel: (): Promise<{ ok: boolean }> => ipcRenderer.invoke('auth:browser:cancel'),
+  },
   toolDefs: () => call('local:toolDefs'),
   callTool: (name: string, args: unknown) => call('local:callTool', name, args),
   folder: {

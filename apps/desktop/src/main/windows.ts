@@ -218,6 +218,11 @@ export async function createMainWindow(): Promise<BrowserWindow> {
   return win;
 }
 
+/** Origin of the web app this window shows (https://moduspilot.com, or the dev server). */
+export function modusOrigin(): string {
+  return new URL(MODUS_URL).origin;
+}
+
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }

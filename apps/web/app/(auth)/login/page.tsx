@@ -66,6 +66,16 @@ const OAUTH_PROVIDERS = { google: googleProvider, apple: appleProvider, microsof
 type OAuthKind = keyof typeof OAUTH_PROVIDERS;
 const EMAIL_KEY = 'modus-email-for-signin';
 
+// MODUS Desktop 0.4.5+ exposes this. It opens sign-in in the user's real
+// browser, where their passkeys, Touch ID and saved logins work (an app window
+// can't reach them). Older desktop builds lack it and keep the popup buttons.
+type DesktopAuthBridge = { signInWithBrowser: () => Promise<{ ok: boolean; error?: string }>; cancel: () => Promise<unknown> };
+function desktopAuth(): DesktopAuthBridge | null {
+  if (typeof window === 'undefined') return null;
+  const b = (window as unknown as { modusDesktop?: { auth?: DesktopAuthBridge } }).modusDesktop?.auth;
+  return b && typeof b.signInWithBrowser === 'function' ? b : null;
+}
+
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState('');
@@ -82,9 +92,18 @@ export default function LoginPage() {
   // nothing to download there. Set after mount to avoid a hydration mismatch;
   // the desktop shell tags its user-agent with "MODUSDesktop".
   const [isDesktop, setIsDesktop] = useState(false);
+  // Desktop browser sign-in: available, waiting on the browser, or the user
+  // chose the old in-app buttons instead.
+  const [browserAuth, setBrowserAuth] = useState(false);
+  const [waiting, setWaiting] = useState(false);
+  const [inApp, setInApp] = useState(false);
 
   useEffect(() => {
     setIsDesktop(typeof navigator !== 'undefined' && navigator.userAgent.includes('MODUSDesktop'));
+    setBrowserAuth(desktopAuth() !== null);
+    if (new URLSearchParams(window.location.search).get('error') === 'desktop') {
+      setError('That sign in did not finish. Please try again.');
+    }
     try {
       setReduced(
         document.documentElement.hasAttribute('data-reduce-motion') ||
@@ -182,6 +201,20 @@ export default function LoginPage() {
     }
   }
 
+  async function signInWithBrowser() {
+    const b = desktopAuth();
+    if (!b) return;
+    setError('');
+    const r = await b.signInWithBrowser().catch(() => ({ ok: false }));
+    if (r.ok) setWaiting(true);
+    else setError('Could not open your browser. Use Sign in here instead.');
+  }
+
+  function cancelBrowser() {
+    desktopAuth()?.cancel().catch(() => {});
+    setWaiting(false);
+  }
+
   async function signInEmail(e: React.FormEvent) {
     e.preventDefault();
     const addr = email.trim();
@@ -257,6 +290,39 @@ export default function LoginPage() {
 
             {/* Card */}
             <div className="bg-panel/90 backdrop-blur-sm border border-border rounded-2xl p-6 sm:p-7 shadow-xl shadow-black/5">
+              {browserAuth && !inApp ? (
+                <div className="text-center">
+                  {waiting ? (
+                    <>
+                      <div className="w-5 h-5 mx-auto rounded-full border-2 border-brand border-t-transparent animate-spin" />
+                      <p className="text-text text-sm font-medium mt-4">Finish signing in in your browser</p>
+                      <p className="text-muted text-xs mt-1.5 leading-relaxed">
+                        MODUS opens here as soon as you&apos;re done.
+                      </p>
+                      <div className="flex items-center justify-center gap-4 mt-5">
+                        <button onClick={signInWithBrowser} className="text-brand text-xs hover:underline">Open browser again</button>
+                        <button onClick={cancelBrowser} className="text-muted text-xs hover:text-text">Cancel</button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={signInWithBrowser}
+                        className="w-full flex items-center justify-center gap-2 bg-brand hover:bg-brand/90 text-white rounded-xl px-4 py-3.5 text-sm font-semibold transition-colors"
+                      >
+                        Sign in with your browser
+                      </button>
+                      <p className="text-muted text-xs mt-3 leading-relaxed">
+                        Use Touch ID, passkeys and saved passwords from Safari or Chrome.
+                      </p>
+                      <button onClick={() => setInApp(true)} className="text-muted/80 text-xs mt-4 hover:text-text">
+                        Sign in here instead
+                      </button>
+                    </>
+                  )}
+                  {error && <p className="text-red-400 text-xs text-center mt-4">{error}</p>}
+                </div>
+              ) : (<>
               <div className="space-y-3">
                 <button
                   onClick={() => signIn('google')}
@@ -363,6 +429,7 @@ export default function LoginPage() {
                 <Link href="/terms" className="underline hover:text-muted">Terms</Link> and{' '}
                 <Link href="/privacy" className="underline hover:text-muted">Privacy</Link>.
               </p>
+              </>)}
             </div>
 
             {/* Download desktop app — hidden inside the desktop shell */}
