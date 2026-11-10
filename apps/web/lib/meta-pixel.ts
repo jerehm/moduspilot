@@ -91,6 +91,10 @@ export function loadPixel(pixelId: string) {
   s.async = true;
   s.src = 'https://connect.facebook.net/en_US/fbevents.js';
   document.head.appendChild(s);
+  // No automatic button-click and page-metadata collection. Modus is a chat app:
+  // sidebar buttons and page text can carry conversation titles, which must never
+  // reach Meta. We send only the events below (PageView and named conversions).
+  fbq('set', 'autoConfig', false, pixelId);
   fbq('init', pixelId);
 }
 
