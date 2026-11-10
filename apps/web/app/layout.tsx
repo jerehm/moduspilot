@@ -3,6 +3,7 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { GlobalErrorCapture } from '@/components/GlobalErrorCapture';
+import { MetaPixel } from '@/components/MetaPixel';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://moduspilot.com'),
@@ -99,6 +100,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             — two problems with opposite fixes. Needs Web Analytics enabled on
             the project in the Vercel dashboard; until then the script no-ops. */}
         <Analytics />
+        {/* Meta ads measurement. Loads nothing until NEXT_PUBLIC_META_PIXEL_ID is
+            set; asks first in the EU, EEA, UK and Switzerland (lib/meta-pixel.ts). */}
+        <MetaPixel />
       </body>
     </html>
   );

@@ -12,6 +12,7 @@ import { collection, query, where, onSnapshot, doc, setDoc } from 'firebase/fire
 import CommandBar from '@/components/ui/CommandBar';
 import { useMobileConnected } from '@/hooks/useMobileConnected';
 import { Tooltip } from '@/components/ui/Tooltip';
+import { MetaCheckoutTracker } from '@/components/MetaCheckoutTracker';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 
 // Minimal inline SVG icons — stroke-based, 24x24 viewBox
@@ -641,6 +642,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
       </main>
 
       <CommandBar open={cmdOpen} onClose={() => setCmdOpen(false)} user={user} />
+      <MetaCheckoutTracker user={user} />
     </div>
   );
 }
