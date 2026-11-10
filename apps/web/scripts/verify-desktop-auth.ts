@@ -124,6 +124,14 @@ async function main() {
   // --- Phishing: an attacker starts a sign-in, sends the victim the link, and
   // polls from THEIR network. The victim's browser approves; the attacker must
   // get nothing, and the victim's own app (same network) still gets the code.
+  // Spoofed x-forwarded-for only reaches the route on a LOCAL server. On Vercel
+  // the edge overwrites it (good), so prod is checked from a real second network
+  // instead (done 11-10 from a Vercel Sandbox: attacker got pending x3).
+  if (!/localhost|127\.0\.0\.1/.test(BASE)) {
+    console.log('SKIP  phishing checks need a local server (Vercel ignores spoofed IPs)');
+    console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
+    process.exit(failed ? 1 : 0);
+  }
   const ph = randomBytes(32).toString('base64url');
   const fromVictim = { 'x-forwarded-for': '203.0.113.10' };
   const fromAttacker = { 'x-forwarded-for': '198.51.100.66' };
