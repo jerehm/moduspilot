@@ -121,6 +121,26 @@ async function main() {
   check('an expired mailbox gives nothing', (await r.json() as { pending?: boolean }).pending === true);
   check('an expired mailbox is deleted', !(await sref.get()).exists);
 
+  // --- Phishing: an attacker starts a sign-in, sends the victim the link, and
+  // polls from THEIR network. The victim's browser approves; the attacker must
+  // get nothing, and the victim's own app (same network) still gets the code.
+  const ph = randomBytes(32).toString('base64url');
+  const fromVictim = { 'x-forwarded-for': '203.0.113.10' };
+  const fromAttacker = { 'x-forwarded-for': '198.51.100.66' };
+  const postAs = (path: string, body: unknown, h: Record<string, string>, tok?: string) => fetch(`${BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...h, ...(tok ? { Authorization: `Bearer ${tok}` } : {}) },
+    body: JSON.stringify(body),
+  });
+  r = await postAs('/api/desktop/auth-code', { state: ph }, fromVictim, idToken);
+  const victimCode = (await r.json() as { code: string }).code;
+  r = await postAs('/api/desktop/auth-poll', { state: ph }, fromAttacker);
+  const atk = await r.json() as { code?: string; pending?: boolean };
+  check('a poller on ANOTHER network gets no code (phishing blocked)', !atk.code && atk.pending === true);
+  r = await postAs('/api/desktop/auth-poll', { state: ph }, fromVictim);
+  const mine = (await r.json() as { code?: string }).code;
+  check('the same-network app still gets the code after the attacker tried', mine === victimCode);
+
   console.log(failed ? `\n${failed} FAILED` : '\nALL PASS');
   process.exit(failed ? 1 : 0);
 }

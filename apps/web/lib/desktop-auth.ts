@@ -40,3 +40,26 @@ export function codeId(code: string): string {
 export function stateId(state: string): string {
   return createHash('sha256').update(`state:${state}`).digest('hex');
 }
+
+/**
+ * Hash of the caller's public IP. The poll fallback hands a code only to a
+ * poller on the same network as the browser that approved it.
+ *
+ * Why: anyone can start a sign-in, so an attacker could make a state, send a
+ * victim /desktop/signin?state=S, and poll for the code the victim's browser
+ * issues: a full account takeover from one click. The attacker is on another
+ * network, so binding the mailbox to the approving browser's IP stops that.
+ * The modusdesktop:// link is unaffected (it only opens on the victim's own Mac),
+ * so a real user whose app and browser show different IPs (a VPN in one of them)
+ * still finishes through the link.
+ *
+ * On Vercel, x-vercel-forwarded-for / x-forwarded-for are set by the edge and
+ * cannot be spoofed by the client.
+ */
+export function clientIpHash(req: Request): string {
+  const ip = (req.headers.get('x-vercel-forwarded-for')
+    ?? req.headers.get('x-forwarded-for')
+    ?? req.headers.get('x-real-ip')
+    ?? 'unknown').split(',')[0].trim();
+  return createHash('sha256').update(`ip:${ip}`).digest('hex');
+}

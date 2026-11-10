@@ -30,6 +30,19 @@ const nextConfig = {
 
   async headers() {
     return [
+      // Baseline hardening on every response. frame-ancestors stops other sites
+      // from framing MODUS (clickjacking), most importantly the one-click
+      // "Continue as" on /desktop/signin. Widgets/HTML previews are srcdoc
+      // iframes INSIDE our pages, which this does not affect.
+      {
+        source: '/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
       // Tell Google not to index auth-protected dashboard pages
       {
         source: '/(dashboard|chat|goals|habits|tasks|briefing|settings)/:path*',

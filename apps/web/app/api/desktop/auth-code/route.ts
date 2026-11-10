@@ -1,6 +1,6 @@
 import { requireAuth } from '@/lib/api-auth';
 import { adminDb } from '@/lib/firebase-admin';
-import { AUTH_CODE_COLLECTION, AUTH_CODE_TTL_MS, AUTH_STATE_COLLECTION, TOKEN_RE, codeId, newCode, stateId } from '@/lib/desktop-auth';
+import { AUTH_CODE_COLLECTION, AUTH_CODE_TTL_MS, AUTH_STATE_COLLECTION, TOKEN_RE, clientIpHash, codeId, newCode, stateId } from '@/lib/desktop-auth';
 
 /**
  * Called by /desktop/signin in the user's BROWSER, already signed in there.
@@ -22,7 +22,8 @@ export async function POST(req: Request) {
   batch.set(adminDb.collection(AUTH_CODE_COLLECTION).doc(codeId(code)), { uid: auth.uid, createdAt: now, expiresAt });
   // The app's mailbox: it polls with its state and gets this code even if the
   // browser never opens the modusdesktop:// link. A newer tab overwrites it.
-  batch.set(adminDb.collection(AUTH_STATE_COLLECTION).doc(stateId(state)), { code, createdAt: now, expiresAt });
+  // Bound to this browser's IP so only a poller on the same network gets it.
+  batch.set(adminDb.collection(AUTH_STATE_COLLECTION).doc(stateId(state)), { code, createdAt: now, expiresAt, ipHash: clientIpHash(req) });
   await batch.commit();
   return Response.json({ code }, { headers: { 'Cache-Control': 'no-store' } });
 }
