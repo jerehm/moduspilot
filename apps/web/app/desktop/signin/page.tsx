@@ -124,7 +124,7 @@ export default function DesktopSignInPage() {
         <>
           <h1 className="font-serif text-2xl font-medium text-text">You&apos;re signed in</h1>
           <p className="text-muted text-sm mt-3 leading-relaxed">
-            MODUS Desktop is signing in as {user?.email}. You can close this tab.
+            MODUS Desktop is signing in as {user?.email}. If it didn&apos;t open, click Open MODUS Desktop below.
           </p>
           <a href={link} className="inline-block text-brand text-sm mt-5 hover:underline">Open MODUS Desktop</a>
         </>

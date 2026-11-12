@@ -96,7 +96,9 @@ async function finish(code: string, via: 'poll' | 'link') {
 
 export async function startBrowserSignIn(): Promise<{ expiresAt: number }> {
   if (!pending || pending.expires < Date.now()) {
-    if (pending) end('timed-out');
+    // Replacing an expired one: clear it quietly. Telling the page 'timed-out'
+    // here would show that error over the new waiting screen.
+    if (pending?.timer) clearTimeout(pending.timer);
     pending = { state: randomBytes(32).toString('base64url'), expires: Date.now() + STATE_TTL_MS, timer: null };
     schedulePoll();
     log.info('[auth] browser sign-in started');
