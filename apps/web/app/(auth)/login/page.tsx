@@ -45,7 +45,8 @@ function credentialFromError(kind: OAuthKind, e: unknown): OAuthCredential | nul
 function safeNext(): string | null {
   if (typeof window === 'undefined') return null;
   const n = new URLSearchParams(window.location.search).get('next');
-  return n && n.startsWith('/') && !n.startsWith('//') ? n : null;
+  // A backslash counts too: browsers read `/\evil.com` as `//evil.com`.
+  return n && n.startsWith('/') && !n.startsWith('//') && !n.includes('\\') ? n : null;
 }
 
 async function getDestination(user: User): Promise<string> {
