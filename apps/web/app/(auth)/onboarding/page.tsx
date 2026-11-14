@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { seedOnboardingAccount } from '@/lib/onboarding';
+import { trackMetaWithServer } from '@/lib/meta-pixel';
 import { isPaidPlan } from '@/lib/plan';
 import { CADENCE_STORAGE_KEY, PLAN_PRICING, isCadence, type Cadence } from '@/lib/pricing';
 
@@ -635,6 +636,9 @@ function OnboardingContent() {
   async function seedAccount() {
     const memories = await seedOnboardingAccount(user!.uid, { name, role, age, gender });
     if (memories.length > 0) {
+      // First completed setup only (memories come back empty on a re-entry), so
+      // each account is one Meta signup. Fire and forget: never blocks setup.
+      void trackMetaWithServer('CompleteRegistration', () => user!.getIdToken());
       // Vector indexing is supplementary. Durable memories are already saved.
       void user!.getIdToken().then(token => Promise.all(memories.map(text => fetch('/api/memory/upsert', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ text }),
