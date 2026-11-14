@@ -144,6 +144,10 @@ export async function POST(req: Request) {
     customer: existingCustomerId,
     subscription_data: subscriptionData,
     payment_method_collection: 'always',
+    // Promo code box on Stripe's page (friend + affiliate codes). Access is
+    // granted on metadata.plan, never on the amount paid, so a discount can't
+    // change what the subscription unlocks.
+    allow_promotion_codes: true,
     metadata: { ...subMetadata, checkoutIntent: intent },
   }, { idempotencyKey: `checkout:${intent}:${Math.floor(Date.now() / 1_800_000)}` });
 
