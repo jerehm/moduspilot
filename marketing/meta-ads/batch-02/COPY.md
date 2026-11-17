@@ -21,7 +21,18 @@ Grounding: every answer, verdict and time is the real output of `/api/chat/compa
 **Headline:** Ask once. See all three answers.
 **Description:** GPT, Claude and Gemini in one app
 
-## M07a/b/c $8 more gets you the rest (price anchor, one per app)
+## M07 $8 more gets you all of them (MAIN, one post, all three apps)
+Files: `MODUS-07-plus-eight-all_*.png`
+Grounding: ChatGPT Plus $20, Claude Pro $20 billed monthly, Google AI Pro $19.99 (shown as $20, the fine print says rounded). All checked Nov 16 2026 on each pricing page. MODUS $28.
+
+**Primary text**
+1. Paying $20 for ChatGPT, Claude or Gemini? For $28 you get all three in one app, plus DeepSeek and Llama.
+2. Most people pay for one AI and wonder what the others would say. For $8 more MODUS gives you all of them and lets you ask three at once.
+
+**Headline:** $8 more gets you all of them
+**Description:** GPT, Claude and Gemini in one app
+
+## M07a/b/c Backups: one version per app (test later against M07)
 Files: `MODUS-07a-plus-eight-chatgpt_*.png`, `MODUS-07b-plus-eight-claude_*.png`, `MODUS-07c-plus-eight-gemini_*.png`
 Run all three in the same ad set. Each names one app so its users know it is about them; Meta finds who responds to which. 07a is the main one (most users).
 Grounding: prices checked Nov 16 2026: ChatGPT Plus $20 (chatgpt.com/pricing), Claude Pro $20 billed monthly (claude.com/pricing, $17 is the annual rate), Google AI Pro $19.99 (gemini.google/subscriptions). MODUS $28. Models from `apps/web/lib/models.ts`.
@@ -37,9 +48,9 @@ Headline: $8 more than ChatGPT Plus / Description: Claude, Gemini and more inclu
 Headline: $8 more than Claude Pro / Description: GPT, Gemini and more included
 
 **07c Gemini**
-1. Already paying $19.99 for Google AI Pro? For $28 you get Gemini plus GPT, Claude, DeepSeek and Llama in one app.
-2. You picked Gemini. For about $8 more you can ask GPT and Claude the same question and compare.
-Headline: About $8 more than Google AI Pro / Description: GPT, Claude and more included
+1. Already paying $20 for Google AI Pro? For $28 you get Gemini plus GPT, Claude, DeepSeek and Llama in one app.
+2. You picked Gemini. For $8 more you can ask GPT and Claude the same question and compare.
+Headline: $8 more than Google AI Pro / Description: GPT, Claude and more included
 
 Check before launch: re-check all three prices the day they go live.
 
@@ -57,7 +68,7 @@ Grounding: YOU. Every line is in your voice and has to be true for you before it
 ---
 
 ## Launch set (my pick)
-Batch-01 M01 (the math), batch-02 M06 (hot dog), batch-02 M07a/b/c ($8 more, all three), plus M08 once you approve the text. Batch-01 M05 is the retargeting ad.
+Batch-01 M01 (the math), batch-02 M06 (hot dog), batch-02 M07 ($8 more, all three apps in one post), plus M08 once you approve the text. Batch-01 M05 is the retargeting ad.
 
 ## Highest ceiling, not built
 A 20 to 30 second selfie video of you asking MODUS the hot dog question and reacting to the split. Founder-on-camera video is the top Meta format for cold traffic. I can write the script.

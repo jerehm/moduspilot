@@ -113,6 +113,41 @@ h1 .serif{color:#6d28d9;font-size:118px;letter-spacing:-.02em}
 </div>"""
     return page(css, body, size)
 
+# ---------- H2 combined: ChatGPT, Claude or Gemini in one post ----------
+def h2all(size):
+    css = """
+body{background:#f0eee6;color:#16131f}
+.tag{font-family:Archivo;font-stretch:125%;font-weight:800;font-size:21px;letter-spacing:.24em;color:#6b6578;margin-top:64px;line-height:1.5}
+h1{font-size:100px;margin-top:18px}
+h1 .serif{color:#6d28d9;font-size:114px;letter-spacing:-.02em}
+.math{margin-top:50px;border-top:3px solid #16131f}
+.li{display:flex;justify-content:space-between;align-items:center;padding:20px 0;border-bottom:1px solid #d6d1c6;font-size:34px}
+.li b{font-weight:700}
+.or{color:#8a8396;font-size:24px;font-style:italic;margin-left:12px;font-weight:500}
+.li .m{color:#6b6578;font-size:26px;margin-top:4px}
+.mod{padding:24px 0}
+.mod b{color:#6d28d9}
+.plus{font-family:Archivo;font-stretch:112%;font-weight:800;font-size:60px;color:#6d28d9}
+.spacer{flex:1}
+.cta{background:#6d28d9;color:#fff}
+.fine{font-size:20px;color:#6b6578;line-height:1.4;max-width:560px}
+.s9x16 h1{font-size:108px}.s9x16 .math{margin-top:70px}.s9x16 .li{padding:26px 0}
+"""
+    body = f"""<div class="wrap">{BRAND('#16131f')}
+<div class="tag">PAYING FOR CHATGPT, CLAUDE OR GEMINI?</div>
+<h1 class="big">$8 more gets you <span class="serif">all of them.</span></h1>
+<div class="math">
+ <div class="li"><div><b>ChatGPT Plus</b><span class="or">or</span></div><div>$20/mo</div></div>
+ <div class="li"><div><b>Claude Pro</b><span class="or">or</span></div><div>$20/mo</div></div>
+ <div class="li"><div><b>Google AI Pro</b></div><div>$20/mo</div></div>
+ <div class="li mod"><div><b>MODUS</b><div class="m">GPT, Claude, Gemini, DeepSeek and Llama</div></div><div>$28/mo</div></div>
+ <div class="li"><div><b>Difference</b></div><div class="plus">+$8</div></div>
+</div>
+<div class="spacer"></div>
+<div class="row"><div class="fine">US monthly prices from each provider's pricing page, Nov 16 2026. Google AI Pro is $19.99, rounded. MODUS gives you the models, not each company's own app features.</div><span class="cta">Try MODUS &rarr;</span></div>
+</div>"""
+    return page(css, body, size)
+
 # ---------- H3: Founder letter (DRAFT, needs his OK on every line) ----------
 def h3(size):
     css = """
@@ -142,9 +177,10 @@ p{font-size:40px;line-height:1.48;margin-top:34px;color:#2a2733}
 from functools import partial
 ADS = {
   'MODUS-06-hot-dog': h1,
+  'MODUS-07-plus-eight-all': h2all,
   'MODUS-07a-plus-eight-chatgpt': partial(h2, app='ChatGPT Plus', tag='CHATGPT', price='20', makers='OpenAI', src='chatgpt.com/pricing', diff='8', short='ChatGPT'),
   'MODUS-07b-plus-eight-claude': partial(h2, app='Claude Pro', tag='CLAUDE', price='20', makers='Anthropic', src='claude.com/pricing', diff='8', short='Claude'),
-  'MODUS-07c-plus-eight-gemini': partial(h2, app='Google AI Pro', tag='GEMINI', price='19.99', makers='Google', src='gemini.google/subscriptions', diff='8.01', short='Gemini'),
+  'MODUS-07c-plus-eight-gemini': partial(h2, app='Google AI Pro', tag='GEMINI', price='20', makers='Google', src='gemini.google/subscriptions ($19.99, rounded)', diff='8', short='Gemini'),
   'MODUS-08-founder-letter': h3,
 }
 
