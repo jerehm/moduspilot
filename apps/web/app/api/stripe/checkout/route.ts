@@ -4,7 +4,7 @@ import { stripe } from '@/lib/stripe';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { isCadence, resolvePlanPrice, type Cadence } from '@/lib/pricing';
 import { ELEMENTS_API_VERSION } from '@/lib/stripe-elements';
-import { ensureUserDoc, resolveStripeCustomer, findLivePlanSubscription, stripeId, acquireCheckoutLock } from '@/lib/billing';
+import { ensureUserDoc, resolveStripeCustomer, findLivePlanSubscription, stripeId, acquireCheckoutLock, customerIdsForUser } from '@/lib/billing';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.moduspilot.com';
 
@@ -151,7 +151,15 @@ export async function POST(req: Request) {
         { status: 409 },
       );
     }
-    for (const other of openSessions.data.filter(o => o.metadata?.plan)) {
+    // Every customer this person could have (a past double click can have made
+    // two), so no open plan checkout survives under a sibling customer either.
+    const allOpen = [...openSessions.data];
+    for (const cid of await customerIdsForUser(uid, email)) {
+      if (cid === existingCustomerId) continue;
+      const more = await stripe.checkout.sessions.list({ customer: cid, status: 'open', limit: 100 }, reqOpts);
+      allOpen.push(...more.data);
+    }
+    for (const other of allOpen.filter(o => o.metadata?.plan)) {
       await stripe.checkout.sessions.expire(other.id, {}, reqOpts).catch(() => { /* already completed or expired */ });
     }
     const session = await stripe.checkout.sessions.create({

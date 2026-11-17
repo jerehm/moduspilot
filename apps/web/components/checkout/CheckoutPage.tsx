@@ -115,7 +115,7 @@ export default function CheckoutPage() {
   const router = useRouter();
   const params = useSearchParams();
 
-  const plan: PaidPlan = params.get('plan') === 'pilot' ? 'pilot' : 'modus';
+  const [plan, setPlan] = useState<PaidPlan>(() => (params.get('plan') === 'pilot' ? 'pilot' : 'modus'));
   const fromParam = params.get('from');
   const from: From = fromParam === 'onboarding' || fromParam === 'paywall' ? fromParam : 'settings';
 
@@ -138,6 +138,14 @@ export default function CheckoutPage() {
     setDark(next);
     document.documentElement.classList.toggle('dark', next);
     try { localStorage.setItem('modus-theme', next ? 'dark' : 'light'); } catch { /* storage is optional */ }
+  }
+
+  function choosePlan(next: PaidPlan) {
+    if (next === plan) return;
+    setPlan(next);
+    const q = new URLSearchParams(params.toString());
+    q.set('plan', next);
+    router.replace(`/checkout?${q.toString()}`, { scroll: false });
   }
 
   function chooseCadence(next: Cadence) {
@@ -219,6 +227,32 @@ export default function CheckoutPage() {
           <Link href={backHref} className="text-sm text-muted hover:text-text">&larr; Back</Link>
           <h1 className="font-serif text-[2.25rem] sm:text-[2.6rem] leading-[1.1] font-medium mt-6">Upgrade to {copy.name}</h1>
           <p className="text-muted mt-2">{copy.tagline}</p>
+
+          {/* Switch plans without leaving checkout. A new Stripe session is made
+              for the new plan; the server expires the old one. */}
+          <div role="radiogroup" aria-label="Plan" className="mt-6 grid grid-cols-2 gap-3 max-w-md">
+            {(['modus', 'pilot'] as PaidPlan[]).map(id => {
+              const active = id === plan;
+              const c = planCopy(id);
+              const pp = PLAN_PRICING[id];
+              return (
+                <button
+                  key={id}
+                  role="radio"
+                  aria-checked={active}
+                  onClick={() => choosePlan(id)}
+                  className={`text-left rounded-xl border px-4 py-3 transition-colors ${
+                    active ? 'border-brand bg-panel ring-1 ring-brand' : 'border-border hover-surface-tint'
+                  }`}
+                >
+                  <span className="block text-sm font-semibold tracking-widest">{c.name}</span>
+                  <span className="block text-sm text-muted mt-1">
+                    ${annual ? pp.annualPerMonth : pp.monthlyPrice}/mo
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
           <div className="mt-8 flex items-baseline gap-1">
             <AnimatedPrice
