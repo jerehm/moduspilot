@@ -1,0 +1,94 @@
+[
+  {
+    "prompt": "Should I text my ex happy birthday? Yes or no, then one short sentence why.",
+    "answers": [
+      {
+        "model": "gpt-6.1-sol",
+        "status": 200,
+        "secs": "9.1",
+        "text": "No. Unless you’re already on friendly terms, a birthday text can send mixed signals."
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "status": 200,
+        "secs": "4.0",
+        "text": "**It depends, but lean no** unless the breakup was amicable and you're genuinely okay with no reply or a cold one; if you're hoping it reopens something or you'd be hurt by silence, skip it."
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "status": 200,
+        "secs": "6.4",
+        "text": "**No.** \n\nIt usually reopens old wounds, sends mixed signals, and complicates the process of moving on."
+      }
+    ]
+  },
+  {
+    "prompt": "I have 20 minutes before work. What should I do with it? One sentence.",
+    "answers": [
+      {
+        "model": "gpt-6.1-sol",
+        "status": 200,
+        "secs": "2.8",
+        "text": "Take a 10-minute walk, drink some water, and use the remaining time to get ready without rushing."
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "status": 200,
+        "secs": "2.1",
+        "text": "Take a brisk 10-minute walk outside, then spend the remaining time on a quick stretch and a glass of water so you start work energized and clear-headed."
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "status": 200,
+        "secs": "5.0",
+        "text": "Step outside for a brisk ten-minute walk, drink a large glass of water, and write down your top three priorities for the day so you can start with a clear, focused mind."
+      }
+    ]
+  },
+  {
+    "prompt": "Is a hot dog a sandwich? Yes or no, then one short sentence.",
+    "answers": [
+      {
+        "model": "gpt-6.1-sol",
+        "status": 200,
+        "secs": "3.6",
+        "text": "Yes. A hot dog is a sandwich because it’s a filling served in a split bun."
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "status": 200,
+        "secs": "1.8",
+        "text": "No. A hot dog is its own category: though it's meat in bread, most people see it as a distinct food with its own name and identity, much like a taco isn't called a sandwich either."
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "status": 200,
+        "secs": "6.3",
+        "text": "Yes. By definition, it consists of filling placed inside a split piece of bread."
+      }
+    ]
+  },
+  {
+    "prompt": "Name the one book everyone should read. Title only, then one short sentence.",
+    "answers": [
+      {
+        "model": "gpt-6.1-sol",
+        "status": 200,
+        "secs": "5.6",
+        "text": "Man’s Search for Meaning\n\nIt shows how finding meaning can sustain us through suffering."
+      },
+      {
+        "model": "claude-sonnet-5-5",
+        "status": 200,
+        "secs": "3.2",
+        "text": "**Man's Search for Meaning**\n\nViktor Frankl's account of surviving the Holocaust shows how people can endure almost anything when they have a reason to live."
+      },
+      {
+        "model": "gemini-3.8-flash",
+        "status": 200,
+        "secs": "5.8",
+        "text": "*Man's Search for Meaning*\n\nIt teaches that our ultimate freedom is the ability to choose our attitude and find purpose, no matter the circumstances."
+      }
+    ]
+  }
+]
