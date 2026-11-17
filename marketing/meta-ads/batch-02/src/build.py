@@ -82,7 +82,7 @@ h1{font-size:84px;margin-top:44px}
     return page(css, body, size)
 
 # ---------- H2: Already paying for ChatGPT? (objection / price anchor) ----------
-def h2(size):
+def h2(size, app, tag, price, makers, src, diff, short):
     css = """
 body{background:#f0eee6;color:#16131f}
 .tag{font-family:Archivo;font-stretch:125%;font-weight:800;font-size:22px;letter-spacing:.3em;color:#6b6578;margin-top:70px}
@@ -100,16 +100,16 @@ h1 .serif{color:#6d28d9;font-size:118px;letter-spacing:-.02em}
 .s9x16 h1{font-size:112px}.s9x16 .math{margin-top:80px}
 """
     body = f"""<div class="wrap">{BRAND('#16131f')}
-<div class="tag">ALREADY PAY FOR CHATGPT?</div>
+<div class="tag">ALREADY PAY FOR {tag}?</div>
 <h1 class="big">$8 more gets you <span class="serif">the rest.</span></h1>
 <div class="math">
- <div class="li"><div><b>ChatGPT Plus</b><div class="m">OpenAI models</div></div><div>$20/mo</div></div>
+ <div class="li"><div><b>{app}</b><div class="m">{makers} models</div></div><div>${price}/mo</div></div>
  <div class="li"><div><b>MODUS</b><div class="m">GPT, Claude, Gemini, DeepSeek and Llama</div></div><div>$28/mo</div></div>
- <div class="li"><div><b>Difference</b></div><div class="plus">+$8</div></div>
+ <div class="li"><div><b>Difference</b></div><div class="plus">+${diff}</div></div>
 </div>
 <div class="models">Ask one model, or ask three at once and compare the answers side by side.</div>
 <div class="spacer"></div>
-<div class="row"><div class="fine">US monthly list price from chatgpt.com/pricing, Nov 2026. MODUS gives you the models, not ChatGPT's own app features.</div><span class="cta">Try MODUS &rarr;</span></div>
+<div class="row"><div class="fine">US monthly price from {src}, Nov 16 2026. MODUS gives you the models, not {short}'s own app features.</div><span class="cta">Try MODUS &rarr;</span></div>
 </div>"""
     return page(css, body, size)
 
@@ -139,7 +139,14 @@ p{font-size:40px;line-height:1.48;margin-top:34px;color:#2a2733}
 </div></div>"""
     return page(css, body, size)
 
-ADS = {'MODUS-06-hot-dog': h1, 'MODUS-07-plus-eight': h2, 'MODUS-08-founder-letter': h3}
+from functools import partial
+ADS = {
+  'MODUS-06-hot-dog': h1,
+  'MODUS-07a-plus-eight-chatgpt': partial(h2, app='ChatGPT Plus', tag='CHATGPT', price='20', makers='OpenAI', src='chatgpt.com/pricing', diff='8', short='ChatGPT'),
+  'MODUS-07b-plus-eight-claude': partial(h2, app='Claude Pro', tag='CLAUDE', price='20', makers='Anthropic', src='claude.com/pricing', diff='8', short='Claude'),
+  'MODUS-07c-plus-eight-gemini': partial(h2, app='Google AI Pro', tag='GEMINI', price='19.99', makers='Google', src='gemini.google/subscriptions', diff='8.01', short='Gemini'),
+  'MODUS-08-founder-letter': h3,
+}
 
 for name, fn in ADS.items():
     for size, (w, h) in SIZES.items():
