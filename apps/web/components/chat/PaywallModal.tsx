@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { auth } from '@/lib/firebase';
 
 interface Props {
   onClose: () => void;
@@ -46,16 +45,8 @@ export default function PaywallModal({ onClose }: Props) {
     setLoading(plan);
     setError('');
     try {
-      const token = await auth.currentUser?.getIdToken();
-      if (!token) { setError('Please sign in to upgrade.'); return; }
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ plan }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error ?? 'Something went wrong.'); return; }
-      window.location.href = data.url;
+      // Our own checkout page (Stripe Payment Element inside the MODUS UI).
+      window.location.href = `/checkout?plan=${plan}&cadence=monthly&from=paywall`;
     } catch {
       setError('Failed to start checkout. Try again.');
     } finally {

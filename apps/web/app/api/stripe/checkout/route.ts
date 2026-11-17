@@ -3,9 +3,12 @@ import type Stripe from 'stripe';
 import { stripe } from '@/lib/stripe';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { isCadence, resolvePlanPrice, type Cadence } from '@/lib/pricing';
+import { ELEMENTS_API_VERSION } from '@/lib/stripe-elements';
 import { ensureUserDoc, resolveStripeCustomer, findLivePlanSubscription, stripeId, acquireCheckoutLock } from '@/lib/billing';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.moduspilot.com';
+
+const CHECKOUT_FROM = ['onboarding', 'settings', 'paywall'] as const;
 
 export async function POST(req: Request) {
   const token = req.headers.get('Authorization')?.replace('Bearer ', '');
@@ -21,11 +24,12 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { plan?: unknown; returnTo?: unknown; cadence?: unknown; quantity?: unknown };
+  let body: { plan?: unknown; returnTo?: unknown; cadence?: unknown; quantity?: unknown; ui?: unknown; from?: unknown };
   try { body = await req.json(); }
   catch { return Response.json({ error: 'Invalid checkout request' }, { status: 400 }); }
   if (!body || typeof body.plan !== 'string') return Response.json({ error: 'Invalid plan' }, { status: 400 });
   const { plan, returnTo, cadence: rawCadence, quantity: rawQuantity } = body;
+  const from = CHECKOUT_FROM.find(f => f === body.from) ?? 'settings';
   const requested: Cadence = isCadence(rawCadence) ? rawCadence : 'monthly';
   const { priceId, cadence } = resolvePlanPrice(plan, requested);
   if (!priceId) return Response.json({ error: 'Invalid plan' }, { status: 400 });
@@ -41,6 +45,9 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Choose between 1 and 20 extra limit packs.' }, { status: 400 });
   }
   const quantity = isAddon ? parsedQuantity : 1;
+  // Our own page only sells plans. The add-on keeps Stripe's hosted page, which
+  // is what gives it the adjustable quantity control.
+  const elementsUi = body.ui === 'elements' && !isAddon;
 
   // Never let a later write hit `5 NOT_FOUND` on a users doc that doesn't exist yet.
   await ensureUserDoc(uid, email);
@@ -118,6 +125,40 @@ export async function POST(req: Request) {
   // New purchases are charged at checkout. Existing trial subscriptions keep
   // their original schedule through the webhook lifecycle.
   const subscriptionData: Stripe.Checkout.SessionCreateParams.SubscriptionData = { metadata: subMetadata };
+
+  if (elementsUi) {
+    // Back to /checkout/return, which reads the session status and then sends the
+    // person to the same success pages as the hosted flow (so MetaCheckoutTracker
+    // keeps firing Subscribe exactly as before). There is no cancel URL: leaving
+    // the page is cancelling.
+    const returnUrl = `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}&from=${from}`;
+    const intent = createHash('sha256').update(JSON.stringify([uid, priceId, quantity, 'elements', from])).digest('hex');
+    const reqOpts = { apiVersion: ELEMENTS_API_VERSION };
+    const openSessions = await stripe.checkout.sessions.list({ customer: existingCustomerId, status: 'open', limit: 100 }, reqOpts);
+    const reuse = openSessions.data.find(session => session.metadata?.checkoutIntent === intent && session.client_secret);
+    if (reuse) return Response.json({ clientSecret: reuse.client_secret });
+    if (!(await acquireCheckoutLock(uid))) {
+      return Response.json(
+        { error: 'A checkout is already in progress. Finish or close the other tab, then try again.', code: 'checkout_in_progress' },
+        { status: 409 },
+      );
+    }
+    const session = await stripe.checkout.sessions.create({
+      // 'elements' is newer than this SDK's types; the per-request API version makes it valid.
+      ui_mode: 'elements' as unknown as Stripe.Checkout.SessionCreateParams.UiMode,
+      mode: 'subscription',
+      payment_method_types: ['card'],
+      line_items: [lineItem],
+      return_url: returnUrl,
+      customer: existingCustomerId,
+      subscription_data: subscriptionData,
+      payment_method_collection: 'always',
+      allow_promotion_codes: true,
+      metadata: { ...subMetadata, checkoutIntent: intent },
+    }, { ...reqOpts, idempotencyKey: `checkout-el:${intent}:${Math.floor(Date.now() / 1_800_000)}` });
+    if (!session.client_secret) return Response.json({ error: 'Checkout could not start. Try again.' }, { status: 502 });
+    return Response.json({ clientSecret: session.client_secret });
+  }
 
   // Reuse an abandoned checkout. Concurrent retries for the same intent share
   // a Stripe idempotency key, rather than creating duplicate subscriptions.

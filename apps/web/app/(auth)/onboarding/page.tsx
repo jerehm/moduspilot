@@ -561,6 +561,13 @@ function OnboardingContent() {
       const stored = window.localStorage.getItem(CADENCE_STORAGE_KEY);
       if (isCadence(stored)) setCadence(stored);
     } catch { /* private mode */ }
+    // A plan picked on /pricing or in an ad (/login?plan=modus&cadence=monthly)
+    // arrives here via login. Preselect it so the plan step isn't a second choice.
+    const q = new URLSearchParams(window.location.search);
+    const p = q.get('plan');
+    if (p === 'modus' || p === 'pilot') setSelectedPlan(p);
+    const c = q.get('cadence');
+    if (isCadence(c)) setCadence(c);
   }, []);
 
   // Google and Apple both hand us a display name at sign-in. Seed the field from
@@ -617,15 +624,9 @@ function OnboardingContent() {
     setSaving(true);
     setError('');
     try {
-      const token = await user!.getIdToken();
-      const res = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ plan: selectedPlan, returnTo: 'dashboard', cadence }),
-      });
-      const data = await res.json();
-      if (!res.ok || !data.url) throw new Error(data.error || 'Could not open checkout. Please retry or continue free.');
-      window.location.href = data.url;
+      // Our own checkout page. It creates the Stripe session itself, including the
+      // already-subscribed guard, and returns to /dashboard?checkout_completed=1.
+      router.push(`/checkout?plan=${selectedPlan}&cadence=${cadence}&from=onboarding`);
     } catch (error) { setError(error instanceof Error ? error.message : 'Could not open checkout. Please retry or continue free.'); }
     finally { pending.current = false; setSaving(false); }
   }

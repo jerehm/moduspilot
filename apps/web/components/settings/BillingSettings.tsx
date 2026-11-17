@@ -81,14 +81,18 @@ export default function BillingSettings({ plan, limitAddonQty = 0 }: Props) {
     setLoading(targetPlan);
     setError('');
     try {
+      // New customers pay on our own checkout page; nothing to call here.
+      if (plan === 'free') {
+        window.location.href = `/checkout?plan=${targetPlan}&cadence=monthly&from=settings`;
+        return;
+      }
       const token = await getToken();
       if (!token) { setError('Please sign in first.'); return; }
 
       // New customers pay through Checkout. Existing
       // subscribers reprice their current subscription in place — no second
       // trial, no duplicate subscription, prorated immediately.
-      const isNewCustomer = plan === 'free';
-      const endpoint = isNewCustomer ? '/api/stripe/checkout' : '/api/stripe/change-plan';
+      const endpoint = '/api/stripe/change-plan';
 
       const res = await fetch(endpoint, {
         method: 'POST',
@@ -99,12 +103,8 @@ export default function BillingSettings({ plan, limitAddonQty = 0 }: Props) {
       const data = await res.json();
       if (!res.ok) { setConfirmPlan(null); setError(data.error ?? 'Something went wrong.'); return; }
 
-      if (isNewCustomer) {
-        window.location.href = data.url; // redirect to Stripe Checkout
-      } else {
-        // Repriced in place — reload so the new plan + success banner show.
-        window.location.href = '/settings?tab=billing&upgraded=1';
-      }
+      // Repriced in place — reload so the new plan + success banner show.
+      window.location.href = '/settings?tab=billing&upgraded=1';
     } catch {
       setConfirmPlan(null);
       setError('Failed to change plan. Try again.');

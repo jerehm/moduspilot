@@ -5,62 +5,7 @@ import { motion } from 'framer-motion';
 import { PLAN_PRICING, LIMIT_ADDON, CADENCE_STORAGE_KEY, type Cadence } from '@/lib/pricing';
 import AnimatedPrice from './AnimatedPrice';
 import CadenceToggle from './CadenceToggle';
-
-type Plan = {
-  id: 'free' | 'modus' | 'pilot';
-  name: string;
-  tagline: string;
-  features: string[];
-  popular?: boolean;
-  free?: boolean;
-};
-
-const PLANS: Plan[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    tagline: 'For trying it out.',
-    free: true,
-    features: [
-      'The open models: Llama, DeepSeek and Gemini Flash',
-      'A rolling window that refreshes through the day',
-      'Full context in every conversation',
-      'Web and Mac apps',
-      'No card, ever',
-    ],
-  },
-  {
-    id: 'modus',
-    name: 'MODUS',
-    tagline: 'Cancel anytime.',
-    popular: true,
-    features: [
-      'Every provider, auto-routed: GPT-6, Claude, Gemini, Llama',
-      'Chat with full context and higher limits',
-      'Generate images and editable PDFs',
-      'Voice interface',
-      'Gmail / Outlook, Calendar and Drive',
-      'Daily briefings, goals and a habit engine',
-      '90-day context memory',
-      'Web, Mac and iPhone (beta)',
-    ],
-  },
-  {
-    id: 'pilot',
-    name: 'PILOT',
-    tagline: 'For founders and executives.',
-    features: [
-      'Everything in MODUS',
-      'The frontier models, manual pick per message: GPT-6 Astra, Claude Opus 5.5, Claude Fable 5.1 and Gemini 4',
-      'Unlimited context memory',
-      'Wearable sync: HealthKit, Oura and Whoop',
-      'Financial pulse via Plaid',
-      'Relationship CRM and meeting intelligence',
-      'Slack, Notion and Linear',
-      'Priority response SLA',
-    ],
-  },
-];
+import { PLANS } from '@/lib/plan-copy';
 
 function Check() {
   return (

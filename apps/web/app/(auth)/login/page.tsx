@@ -49,14 +49,26 @@ function safeNext(): string | null {
   return n && n.startsWith('/') && !n.startsWith('//') && !n.includes('\\') ? n : null;
 }
 
+// A plan picked on /pricing or in an ad: /login?plan=modus&cadence=monthly.
+function pickedPlan(): string {
+  if (typeof window === 'undefined') return '';
+  const q = new URLSearchParams(window.location.search);
+  const plan = q.get('plan');
+  if (plan !== 'modus' && plan !== 'pilot') return '';
+  const cadence = q.get('cadence') === 'annual' ? 'annual' : 'monthly';
+  return `plan=${plan}&cadence=${cadence}`;
+}
+
 async function getDestination(user: User): Promise<string> {
   const next = safeNext();
   if (next) return next;
+  const picked = pickedPlan();
   try {
     const snap = await getDoc(doc(db, 'users', user.uid));
-    return snap.data()?.onboardingComplete ? '/dashboard' : '/onboarding';
+    if (snap.data()?.onboardingComplete) return picked ? `/checkout?${picked}&from=settings` : '/dashboard';
+    return picked ? `/onboarding?${picked}` : '/onboarding';
   } catch {
-    return '/onboarding';
+    return picked ? `/onboarding?${picked}` : '/onboarding';
   }
 }
 
