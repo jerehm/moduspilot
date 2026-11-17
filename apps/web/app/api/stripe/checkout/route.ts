@@ -132,16 +132,27 @@ export async function POST(req: Request) {
     // keeps firing Subscribe exactly as before). There is no cancel URL: leaving
     // the page is cancelling.
     const returnUrl = `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}&from=${from}`;
-    const intent = createHash('sha256').update(JSON.stringify([uid, priceId, quantity, 'elements', from])).digest('hex');
+    const intent = createHash('sha256').update(JSON.stringify([uid, existingCustomerId, priceId, quantity, 'elements', from])).digest('hex');
     const reqOpts = { apiVersion: ELEMENTS_API_VERSION };
     const openSessions = await stripe.checkout.sessions.list({ customer: existingCustomerId, status: 'open', limit: 100 }, reqOpts);
-    const reuse = openSessions.data.find(session => session.metadata?.checkoutIntent === intent && session.client_secret);
-    if (reuse) return Response.json({ clientSecret: reuse.client_secret });
-    if (!(await acquireCheckoutLock(uid))) {
+    // List results omit client_secret, so fetch the matching session itself.
+    const match = openSessions.data.find(session => session.metadata?.checkoutIntent === intent);
+    if (match) {
+      const reuse = await stripe.checkout.sessions.retrieve(match.id, {}, reqOpts);
+      if (reuse.status === 'open' && reuse.client_secret) return Response.json({ clientSecret: reuse.client_secret });
+    }
+    // Short lock: it only has to stop two creates landing at the same instant.
+    // What actually keeps this to ONE subscription is below: every other open
+    // session for this customer is expired before the new one exists, so
+    // switching monthly/annual never leaves two payable checkouts behind.
+    if (!(await acquireCheckoutLock(uid, 10_000))) {
       return Response.json(
         { error: 'A checkout is already in progress. Finish or close the other tab, then try again.', code: 'checkout_in_progress' },
         { status: 409 },
       );
+    }
+    for (const other of openSessions.data.filter(o => o.metadata?.plan)) {
+      await stripe.checkout.sessions.expire(other.id, {}, reqOpts).catch(() => { /* already completed or expired */ });
     }
     const session = await stripe.checkout.sessions.create({
       // 'elements' is newer than this SDK's types; the per-request API version makes it valid.
@@ -155,7 +166,10 @@ export async function POST(req: Request) {
       payment_method_collection: 'always',
       allow_promotion_codes: true,
       metadata: { ...subMetadata, checkoutIntent: intent },
-    }, { ...reqOpts, idempotencyKey: `checkout-el:${intent}:${Math.floor(Date.now() / 1_800_000)}` });
+    }, { ...reqOpts, // Short window on purpose: it only has to absorb a double submit. A
+      // 30 minute window (the hosted path's) hands back a session that was
+      // already PAID when someone cancels and buys again soon after.
+      idempotencyKey: `checkout-el:${intent}:${Math.floor(Date.now() / 10_000)}` });
     if (!session.client_secret) return Response.json({ error: 'Checkout could not start. Try again.' }, { status: 502 });
     return Response.json({ clientSecret: session.client_secret });
   }

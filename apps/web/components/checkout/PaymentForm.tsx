@@ -80,7 +80,7 @@ export default function PaymentForm({
           <div className="flex items-center justify-between text-sm">
             <span className="text-text">
               {discount.displayName}
-              {discount.promotionCode ? <span className="text-muted"> ({discount.promotionCode})</span> : null}
+              {discount.promotionCode && discount.promotionCode !== discount.displayName ? <span className="text-muted"> ({discount.promotionCode})</span> : null}
             </span>
             <button onClick={removePromo} disabled={promoBusy} className="text-muted hover:text-text underline">Remove</button>
           </div>

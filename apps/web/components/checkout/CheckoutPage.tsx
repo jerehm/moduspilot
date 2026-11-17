@@ -26,6 +26,19 @@ import PaymentForm from './PaymentForm';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '');
 
+// One in-flight session start per (plan, cadence, from). React may run the start
+// effect twice (dev Strict Mode, a fast remount); both callers share one request
+// instead of racing the server's checkout lock.
+type StartResult = { ok: boolean; clientSecret?: string; code?: string; error?: string };
+const inflight = new Map<string, Promise<StartResult>>();
+function startSession(key: string, run: () => Promise<StartResult>): Promise<StartResult> {
+  const existing = inflight.get(key);
+  if (existing) return existing;
+  const p = run().finally(() => { setTimeout(() => inflight.delete(key), 0); });
+  inflight.set(key, p);
+  return p;
+}
+
 type PaidPlan = 'modus' | 'pilot';
 type From = 'onboarding' | 'settings' | 'paywall';
 
@@ -81,7 +94,7 @@ function ThemeButton({ dark, onToggle }: { dark: boolean; onToggle: () => void }
     <button
       onClick={onToggle}
       aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
-      className="fixed top-4 right-4 z-50 w-9 h-9 rounded-full bg-panel border border-border/60 text-muted hover:text-text flex items-center justify-center transition-colors"
+      className="absolute top-4 right-4 z-50 w-9 h-9 rounded-full bg-panel border border-border/60 text-muted hover:text-text flex items-center justify-center transition-colors"
     >
       {dark ? (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-4 h-4">
@@ -113,6 +126,7 @@ export default function CheckoutPage() {
   const [dark, setDark] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [startError, setStartError] = useState('');
+  const [attempt, setAttempt] = useState(0);
   const requestId = useRef(0);
 
   // Same theme key as the homepage, login and app.
@@ -151,13 +165,24 @@ export default function CheckoutPage() {
     setStartError('');
     (async () => {
       try {
-        const token = await user.getIdToken();
-        const res = await fetch('/api/stripe/checkout', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ plan, cadence, ui: 'elements', from }),
+        const data = await startSession(`${plan}:${cadence}:${from}`, async () => {
+          const token = await user.getIdToken();
+          // The server locks one checkout start per user. A second start that
+          // arrives while the first is creating its session gets 409
+          // checkout_in_progress; by the retry, the first session exists and
+          // the server hands that same session back.
+          for (let tries = 0; ; tries++) {
+            const res = await fetch('/api/stripe/checkout', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ plan, cadence, ui: 'elements', from }),
+            });
+            const body = await res.json().catch(() => ({}));
+            if (body.code === 'checkout_in_progress' && tries < 6) { await new Promise(r => setTimeout(r, 2000)); continue; }
+            return { ok: res.ok, ...body };
+          }
         });
-        const data = await res.json().catch(() => ({}));
+        const res = { ok: data.ok };
         if (id !== requestId.current) return;
         if (data.code === 'has_subscription') { router.replace('/settings?tab=billing'); return; }
         if (!res.ok || !data.clientSecret) throw new Error(data.error || 'Checkout could not start. Try again.');
@@ -166,7 +191,7 @@ export default function CheckoutPage() {
         if (id === requestId.current) setStartError(e instanceof Error ? e.message : 'Checkout could not start. Try again.');
       }
     })();
-  }, [user, plan, cadence, from, router]);
+  }, [user, plan, cadence, from, router, attempt]);
 
   const copy = planCopy(plan);
   const price = PLAN_PRICING[plan];
@@ -174,15 +199,16 @@ export default function CheckoutPage() {
   const dueToday = annual ? price.annualTotal : price.monthlyPrice;
   const options = useMemo(() => clientSecret ? {
     clientSecret,
+    // No defaultValues.email: the session's Stripe customer already carries it,
+    // and Stripe rejects a second email on a customer-bound session.
     elementsOptions: { appearance: appearance(dark), fonts: FONTS },
-    defaultValues: { email: user?.email ?? undefined },
-  } : null, [clientSecret, dark, user?.email]);
+  } : null, [clientSecret, dark]);
 
   const backHref = from === 'onboarding' ? '/onboarding?checkout=1' : from === 'paywall' ? '/chat' : '/settings?tab=billing';
 
   return (
-    <div className={`marketing ${dark ? 'marketing-dark-tokens' : 'marketing-light-tokens'} min-h-screen w-full bg-bg text-text`}>
-      <div className="fixed top-4 left-4 sm:top-6 sm:left-6 z-50">
+    <div className={`marketing ${dark ? 'marketing-dark-tokens' : 'marketing-light-tokens'} relative min-h-screen w-full bg-bg text-text`}>
+      <div className="absolute top-4 left-4 sm:top-6 sm:left-6 z-50">
         <Link href="/" className="flex items-center gap-1.5"><BrandLockup /></Link>
       </div>
       <ThemeButton dark={dark} onToggle={toggleTheme} />
@@ -237,7 +263,7 @@ export default function CheckoutPage() {
           {startError ? (
             <div role="alert" className="text-sm text-red-600 dark:text-red-400 py-6">
               {startError}
-              <button onClick={() => chooseCadence(cadence)} className="block mt-3 underline text-text">Try again</button>
+              <button onClick={() => setAttempt(a => a + 1)} className="block mt-3 underline text-text">Try again</button>
             </div>
           ) : !options ? (
             <div className="py-16 flex justify-center">
