@@ -20,7 +20,10 @@ export async function POST(req: Request) {
   try {
     const decoded = await adminAuth.verifyIdToken(token);
     uid = decoded.uid;
-    email = decoded.email;
+    // Billing finds Stripe customers and subscriptions BY EMAIL. Only a verified
+    // email may be used for that: an unverified claim would let one account match
+    // another person's customer (their plan, their billing portal, their sub).
+    email = decoded.email_verified === true ? decoded.email : undefined;
   } catch {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -97,12 +100,32 @@ export async function POST(req: Request) {
   // invoice. (While still in trial, Stripe defers any charge to trial end.) The
   // metadata.plan drives the customer.subscription.updated webhook.
   const isUpgrade = (RANK[newPlan] ?? 0) > (RANK[currentPlan] ?? 0);
-  await stripe.subscriptions.update(subId, {
-    items: [{ id: itemId, price: priceId }],
-    proration_behavior: isUpgrade ? 'always_invoice' : 'create_prorations',
+  if (isUpgrade) {
+    // An upgrade charges the prorated difference NOW. pending_if_incomplete means
+    // Stripe only applies the new price if that charge succeeds; a declined card
+    // leaves the subscription exactly as it was. Without it the price, and the
+    // plan grant below, switched to the higher tier before any money arrived.
+    // Stripe rejects metadata in the same call, so it follows on success.
+    const updated = await stripe.subscriptions.update(subId, {
+      items: [{ id: itemId, price: priceId }],
+      proration_behavior: 'always_invoice',
+      payment_behavior: 'pending_if_incomplete',
+    });
+    if (updated.pending_update) {
+      return Response.json({
+        error: 'Your card was declined for the upgrade. Update your payment method in Billing and try again.',
+        code: 'payment_failed',
+      }, { status: 402 });
+    }
     // cadence is carried so the mirror matches what Stripe is actually billing.
-    metadata: { uid, plan: newPlan, cadence },
-  });
+    await stripe.subscriptions.update(subId, { metadata: { uid, plan: newPlan, cadence } });
+  } else {
+    await stripe.subscriptions.update(subId, {
+      items: [{ id: itemId, price: priceId }],
+      proration_behavior: 'create_prorations',
+      metadata: { uid, plan: newPlan, cadence },
+    });
+  }
 
   // Reflect immediately; the subscription.updated webhook also sets this (idempotent).
   // set+merge so this can never throw `5 NOT_FOUND` on a missing users doc.

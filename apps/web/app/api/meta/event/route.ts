@@ -32,7 +32,8 @@ export async function POST(req: Request) {
   if (typeof event !== 'string' || !EVENTS.has(event)) return Response.json({ error: 'Unknown event' }, { status: 400 });
   if (typeof eventId !== 'string' || eventId.length < 8 || eventId.length > 100) return Response.json({ error: 'Bad event id' }, { status: 400 });
 
-  const user = (await adminDb.collection('users').doc(uid).get()).data();
+  const userRef = adminDb.collection('users').doc(uid);
+  const user = (await userRef.get()).data();
   let customData: Record<string, unknown> | undefined;
   if (event === 'CompleteRegistration') {
     if (user?.onboardingComplete !== true) return Response.json({ ok: false });
@@ -40,6 +41,21 @@ export async function POST(req: Request) {
     if (!isPaidPlan(user?.plan)) return Response.json({ ok: false, retry: true });
     customData = { content_name: user!.plan };
   }
+
+  // Report each conversion ONCE. Subscribe lands on /settings?upgraded=1, which a
+  // plan change and any revisit also reach; without this every one of those
+  // counted as a new subscriber and Meta optimised ad spend toward them. The
+  // claim is transactional so two tabs can't both report.
+  const marker = event === 'CompleteRegistration'
+    ? { field: 'metaRegistrationSent', value: true as string | boolean }
+    : { field: 'metaSubscribeSentFor', value: (typeof user?.subscriptionId === 'string' ? user.subscriptionId : true) as string | boolean };
+  const claimed = await adminDb.runTransaction(async tx => {
+    const current = (await tx.get(userRef)).data()?.[marker.field];
+    if (current === marker.value) return false;
+    tx.set(userRef, { [marker.field]: marker.value }, { merge: true });
+    return true;
+  });
+  if (!claimed) return Response.json({ ok: false });
 
   const str = (v: unknown, max: number) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : undefined);
   const sourceUrl = str(body.sourceUrl, 2000);
@@ -57,5 +73,7 @@ export async function POST(req: Request) {
     fbc: str(body.fbc, 500),
     customData,
   });
-  return Response.json({ ok });
+  // confirmed: the browser pixel may now report the same event (same eventId,
+  // so Meta counts it once across browser and server).
+  return Response.json({ ok, confirmed: true });
 }

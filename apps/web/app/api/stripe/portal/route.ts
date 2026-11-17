@@ -13,7 +13,10 @@ export async function POST(req: Request) {
   try {
     const decoded = await adminAuth.verifyIdToken(token);
     uid = decoded.uid;
-    email = decoded.email ?? undefined;
+    // Billing finds Stripe customers and subscriptions BY EMAIL. Only a verified
+    // email may be used for that: an unverified claim would let one account match
+    // another person's customer (their plan, their billing portal, their sub).
+    email = decoded.email_verified === true ? decoded.email : undefined;
   } catch {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }

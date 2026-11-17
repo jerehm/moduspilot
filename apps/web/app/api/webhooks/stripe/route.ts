@@ -324,6 +324,39 @@ export async function POST(req: Request) {
     }
   }
 
+  // A chargeback: the customer told their bank they didn't authorise the charge.
+  // Stripe does NOT stop the subscription on a dispute, so it would keep billing
+  // (and get disputed again) while access stayed on. Cancel it now; the
+  // customer.subscription.deleted that follows runs the normal downgrade.
+  // The charge is read through our pinned SDK version, where charge.invoice
+  // still exists, regardless of the endpoint's newer payload version.
+  if (event.type === 'charge.dispute.created') {
+    const dispute = event.data.object as { id: string; charge: string | { id: string } };
+    const chargeId = typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id;
+    try {
+      const charge = await stripe.charges.retrieve(chargeId, { expand: ['invoice'] });
+      const invoice = charge.invoice as { id: string } | string | null;
+      const invoiceObj = invoice ? (typeof invoice === 'string' ? await stripe.invoices.retrieve(invoice) : await stripe.invoices.retrieve(invoice.id)) : null;
+      const subId = invoiceObj ? subscriptionIdFromInvoice(invoiceObj) : null;
+      if (subId) {
+        const sub = await stripe.subscriptions.retrieve(subId);
+        if (sub.status !== 'canceled') {
+          await stripe.subscriptions.cancel(subId, { prorate: false });
+          log(event, 'dispute → subscription canceled', { sub: subId, dispute: dispute.id });
+        } else {
+          log(event, 'dispute on an already canceled subscription', { sub: subId });
+        }
+      } else {
+        log(event, 'dispute not tied to a subscription', { charge: chargeId });
+      }
+    } catch (e) {
+      // Throwing makes Stripe retry, which is what we want for a transient error.
+      console.error('[stripe-webhook] dispute handling failed', dispute.id, e);
+      return Response.json({ error: 'dispute handling failed' }, { status: 500 });
+    }
+    return Response.json({ received: true });
+  }
+
   // Downgrade on failed payment after all retries exhausted
   if (event.type === 'invoice.payment_failed') {
     const invoice = event.data.object;

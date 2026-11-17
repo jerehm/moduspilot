@@ -136,7 +136,9 @@ export async function trackMetaWithServer(
   await whenDecided(20000);
   if (!isTrackingAllowed()) return;
   const eventId = newEventId();
-  trackMeta(event, opts.params, eventId);
+  // The browser pixel fires only once the server CONFIRMS the conversion (a paid
+  // plan, reported once). Firing it up front counted plan changes and URL
+  // revisits as new subscribers.
   const attempts = 1 + (opts.retries ?? 0);
   for (let i = 0; i < attempts; i++) {
     try {
@@ -151,7 +153,8 @@ export async function trackMetaWithServer(
         }),
         keepalive: true,
       });
-      const data = await res.json().catch(() => ({})) as { retry?: boolean };
+      const data = await res.json().catch(() => ({})) as { retry?: boolean; confirmed?: boolean };
+      if (data.confirmed) { trackMeta(event, opts.params, eventId); return; }
       if (!data.retry) return;
     } catch { /* network hiccup: try again if attempts remain */ }
     await new Promise(r => setTimeout(r, 3000));

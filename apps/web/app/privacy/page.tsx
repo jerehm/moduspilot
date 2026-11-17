@@ -88,6 +88,7 @@ export default function PrivacyPage() {
             <li><span className="text-text font-medium">Stripe</span>: Payment processing (we never see or store your card details)</li>
             <li><span className="text-text font-medium">Firebase / Google Cloud</span>: Authentication and database</li>
             <li><span className="text-text font-medium">Vercel</span>: Hosting, deployment, and privacy-friendly pageview analytics</li>
+            <li><span className="text-text font-medium">Meta Platforms (Meta Pixel and Conversions API)</span>: Ad measurement, so we can tell which ads bring people to Modus. When you visit, sign up or subscribe, Meta receives that event along with your IP address, browser details and your account ID and email, both in hashed (scrambled) form. Your messages are never sent. It stays off if your browser sends Global Privacy Control, and in regions that require consent it only runs after you agree</li>
             <li><span className="text-text font-medium">Sentry</span>: Error monitoring, so crashes get diagnosed and fixed</li>
           </ul>
           <p>These providers process your data to deliver their part of the service. We do not permit any of them to use your data to train their models.</p>

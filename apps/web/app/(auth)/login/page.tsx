@@ -45,8 +45,17 @@ function credentialFromError(kind: OAuthKind, e: unknown): OAuthCredential | nul
 function safeNext(): string | null {
   if (typeof window === 'undefined') return null;
   const n = new URLSearchParams(window.location.search).get('next');
-  // A backslash counts too: browsers read `/\evil.com` as `//evil.com`.
-  return n && n.startsWith('/') && !n.startsWith('//') && !n.includes('\\') ? n : null;
+  if (!n || !n.startsWith('/')) return null;
+  // Resolve it the way the browser will, then require our own origin. String
+  // checks alone missed `/<tab>/evil.com`: browsers strip tabs and newlines, so
+  // it became `//evil.com` and sent a freshly signed-in user to another site.
+  try {
+    const u = new URL(n, window.location.origin);
+    if (u.origin !== window.location.origin) return null;
+    return `${u.pathname}${u.search}${u.hash}`;
+  } catch {
+    return null;
+  }
 }
 
 // A plan picked on /pricing or in an ad: /login?plan=modus&cadence=monthly.
