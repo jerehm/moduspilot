@@ -230,7 +230,7 @@ export default function CheckoutPage() {
 
           {/* Switch plans without leaving checkout. A new Stripe session is made
               for the new plan; the server expires the old one. */}
-          <div role="radiogroup" aria-label="Plan" className="mt-6 grid grid-cols-2 gap-3 max-w-md">
+          <div role="radiogroup" aria-label="Plan" className="mt-6 flex gap-3 max-w-md">
             {(['modus', 'pilot'] as PaidPlan[]).map(id => {
               const active = id === plan;
               const c = planCopy(id);
@@ -241,13 +241,22 @@ export default function CheckoutPage() {
                   role="radio"
                   aria-checked={active}
                   onClick={() => choosePlan(id)}
-                  className={`text-left rounded-xl border px-4 py-3 transition-colors ${
+                  // The chosen plan takes two thirds of the row, the other one
+                  // third; flex-grow animates the width change both ways.
+                  style={{ flexGrow: active ? 2 : 1 }}
+                  className={`basis-0 min-w-0 text-left rounded-xl border px-4 py-3 overflow-hidden transition-[flex-grow,border-color,background-color] duration-300 ease-out motion-reduce:transition-none ${
                     active ? 'border-brand bg-panel ring-1 ring-brand' : 'border-border hover-surface-tint'
                   }`}
                 >
-                  <span className="block text-sm font-semibold tracking-widest">{c.name}</span>
-                  <span className="block text-sm text-muted mt-1">
+                  <span className="block text-sm font-semibold tracking-widest truncate">{c.name}</span>
+                  <span className="block text-sm text-muted mt-1 truncate">
                     ${annual ? pp.annualPerMonth : pp.monthlyPrice}/mo
+                  </span>
+                  <span
+                    className={`block text-xs text-muted mt-1 whitespace-nowrap truncate transition-opacity duration-300 motion-reduce:transition-none ${active ? 'opacity-100' : 'opacity-0'}`}
+                    aria-hidden={!active}
+                  >
+                    {c.tagline}
                   </span>
                 </button>
               );
