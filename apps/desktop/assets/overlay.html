@@ -222,7 +222,10 @@
     <div id="signedOutPanel" class="panel hidden">
       <h2 id="signedOutTitle">Sign in to use Screen Assist</h2>
       <p id="signedOutText"></p>
-      <div class="actions"><button class="primary" id="openApp">Open MODUS</button></div>
+      <div class="actions">
+        <button class="primary hidden" id="seePlans">See plans</button>
+        <button class="primary" id="openApp">Open MODUS</button>
+      </div>
     </div>
 
     <div id="hint" class="hint"></div>
@@ -271,10 +274,10 @@
       'claude-opus-5-5': 'Claude Opus 5.5',
       'claude-fable-5-1': 'Claude Fable 5.1',
       'gemini-3.8-flash': 'Gemini 3.8 Flash',
+      'gemini-3.5-flash-lite': 'Gemini 3.5 Flash Lite',
       'gemini-4-argon': 'Gemini 4',
       'gpt-6.1-sol': 'GPT-6.1 Sol',
       'gpt-6-astra': 'GPT-6 Astra',
-      'gpt-4o-mini': 'GPT-4o mini',
       'meta/llama-3.3-70b': 'Llama 3.3',
       'meta/llama-4-maverick': 'Llama 4 Maverick',
       'deepseek/deepseek-v3.1': 'DeepSeek V3.1'
@@ -356,6 +359,7 @@
   el('areaBtn').addEventListener('click', function () { window.modus.selectRegion(); });
   el('clearBtn').addEventListener('click', function () { window.modus.clear(); });
   el('openApp').addEventListener('click', function () { window.modus.openApp(); });
+  el('seePlans').addEventListener('click', function () { window.modus.openCheckout(); });
   el('permOpen').addEventListener('click', function () { window.modus.openScreenSettings(); });
   el('permRelaunch').addEventListener('click', function () { window.modus.relaunch(); });
   watchBtn.addEventListener('click', function () { window.modus.setWatch(!watching); });
@@ -447,9 +451,15 @@
     setBusy(false);
     thinking.classList.remove('show');
     streaming = null;
-    if (err.kind === 'signed-out' || err.kind === 'no-subscription') {
-      signedOutTitle.textContent = err.kind === 'signed-out' ? 'Sign in to use Screen Assist' : 'Your access has ended';
+    // Most people who see this never paid, so it must not read as "your access
+    // has ended". A plan fixes both of these, so offer plans, not just the app.
+    if (err.kind === 'signed-out' || err.kind === 'no-subscription' || err.upgrade) {
+      signedOutTitle.textContent = err.kind === 'signed-out'
+        ? 'Sign in to use Screen Assist'
+        : err.kind === 'limit' ? 'Free limit reached' : 'Screen Assist is part of MODUS and PILOT';
       signedOutText.textContent = err.message;
+      show(el('seePlans'), !!err.upgrade);
+      show(el('openApp'), !err.upgrade);
       show(signedOutPanel, true);
       return;
     }
@@ -473,7 +483,7 @@
     show(permPanel, needed);
     show(shot, !needed && !!shot.src);
     permText.textContent = status === 'denied'
-      ? 'Screen Recording is turned off for MODUS. Turn it on in System Settings, then relaunch — macOS only applies the change to a fresh launch.'
+      ? 'Screen Recording is turned off for MODUS. Turn it on in System Settings, then relaunch. macOS only applies the change to a fresh launch.'
       : 'macOS needs your approval before MODUS can read the screen. Grant Screen Recording, then relaunch.';
   });
 
@@ -490,7 +500,7 @@
     show(permPanel, init.permission !== 'granted');
     if (init.permission !== 'granted') {
       permText.textContent = init.permission === 'denied'
-        ? 'Screen Recording is turned off for MODUS. Turn it on in System Settings, then relaunch — macOS only applies the change to a fresh launch.'
+        ? 'Screen Recording is turned off for MODUS. Turn it on in System Settings, then relaunch. macOS only applies the change to a fresh launch.'
         : 'macOS needs your approval before MODUS can read the screen. Grant Screen Recording, then relaunch.';
     }
     paintWatch(init.watchEnabled);

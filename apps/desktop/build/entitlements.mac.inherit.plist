@@ -10,6 +10,13 @@
   <!-- Needed so the app can load its native module (better-sqlite3). -->
   <key>com.apple.security.cs.disable-library-validation</key>
   <true/>
+  <!-- Microphone for the web chat's voice input (getUserMedia). A hardened
+       runtime exception, NOT a restricted entitlement: no profile needed.
+       Without it the hardened runtime refuses the mic and chat shows
+       "Microphone access denied." Chromium captures audio in a helper process,
+       so the helpers carry it too. -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
   <!-- Helper processes. NO profile-backed keys here: those live only in
        entitlements.mac.plist for the main app. -->
 </dict>

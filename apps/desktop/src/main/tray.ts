@@ -11,6 +11,7 @@ import type { IngestPayload, SourceRead } from '../shared/types';
 import { readAppleNotes, isFullDiskAccessGranted as notesFdaGranted } from './sync/appleNotesSync';
 import { readRecentMessages, isFullDiskAccessGranted as messagesFdaGranted } from './sync/appleMessagesSync';
 import { readAppleReminders, isFullDiskAccessGranted as remindersFdaGranted } from './sync/appleReminders';
+import { getUpdateState, installUpdateNow, onUpdateStateChange, openManualDownload } from './updater';
 
 let tray: Tray | null = null;
 let syncing = false;
@@ -52,6 +53,7 @@ export function createTray(): void {
   // reached for it to ask about the screen you were just covering up.
   // Opt-in, off by default.
   tray.on('click', () => { if (getOpenAppOnTrayClick()) showMainWindow(); });
+  onUpdateStateChange(rebuildMenu);
   rebuildMenu();
 }
 
@@ -219,6 +221,15 @@ function rebuildMenu(): void {
     syncClick = () => { runSync(); };
   }
 
+  // Update items go at the top: a downloaded update that only installs on quit
+  // can wait for weeks in a tray app (see updater.ts), so it has to be seen.
+  const update = getUpdateState();
+  const updateItems: Electron.MenuItemConstructorOptions[] = [
+    ...(update.ready ? [{ label: `Restart to update to ${update.ready}`, click: () => installUpdateNow() }] : []),
+    ...(update.failed ? [{ label: `Update did not install. Download ${update.failed}…`, click: () => openManualDownload() }] : []),
+  ];
+  if (updateItems.length) updateItems.push({ type: 'separator' });
+
   const held = reconcileLine();
   const lastLine = lastSyncAt
     ? (held ?? `Last synced ${lastSyncAt.toLocaleTimeString()} (${lastNotesCount} notes, ${lastMessagesCount} chats)`)
@@ -226,6 +237,7 @@ function rebuildMenu(): void {
 
   tray.setContextMenu(
     Menu.buildFromTemplate([
+      ...updateItems,
       {
         label: signedInEmail
           ? `Signed in as ${signedInEmail}`

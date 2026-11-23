@@ -6,7 +6,7 @@ import { ask, buildTurn, buildWatchTurn, WATCH_MODEL, DEFAULT_QUESTION, type Ass
 import { startWatch, stopWatch, isWatching } from './watch';
 import { selectRegion, cancelRegion, isRegionOpen } from './region';
 import { getScreenAssist, setScreenAssist, consumeWatchLook, watchLooksRemaining, MAX_WATCH_LOOKS_PER_DAY } from '../settings';
-import { showMainWindow } from '../windows';
+import { openCheckout, showMainWindow } from '../windows';
 
 /**
  * The Screen Assist overlay: a small always-on-top panel that floats over
@@ -555,6 +555,7 @@ function wireIpc(): void {
   });
 
   ipcMain.on('assist:open-app', () => showMainWindow());
+  ipcMain.on('assist:open-checkout', () => openCheckout());
 }
 
 /**

@@ -146,6 +146,12 @@ interface DesktopSettings {
   localMcpServers?: LocalMcpServerConfig[];
   /** serverId -> tool names the user chose "Always allow" for. */
   localMcpAllowed?: Record<string, string[]>;
+  /**
+   * The version we asked Squirrel to install on the last "Restart to update".
+   * If the app comes back up still older than this, the install failed and the
+   * tray offers the manual download instead of retrying forever.
+   */
+  updateInstallTarget?: string | null;
 }
 
 export interface LocalMcpServerConfig {
@@ -274,4 +280,13 @@ export function getLocalMcpAllowed(): Record<string, string[]> {
 export function setLocalMcpAllowed(map: Record<string, string[]>): void {
   const s = read();
   write({ ...s, localMcpAllowed: map });
+}
+
+export function getUpdateInstallTarget(): string | null {
+  return read().updateInstallTarget ?? null;
+}
+
+export function setUpdateInstallTarget(version: string | null): void {
+  const s = read();
+  write({ ...s, updateInstallTarget: version });
 }

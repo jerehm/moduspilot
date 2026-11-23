@@ -74,3 +74,7 @@ if (problems.length > 0) {
 }
 
 console.log(`[preflight] notarization via ${satisfied.name}; publish token present`);
+
+// User copy rule (no em dash, en dash or emoji). Cheap, and a release is the
+// last chance to catch it. See scripts/check-copy.js.
+require('child_process').execFileSync(process.execPath, [require('path').join(__dirname, 'check-copy.js')], { stdio: 'inherit' });

@@ -50,6 +50,8 @@ const api = {
   openScreenSettings: (): void => { ipcRenderer.send('assist:open-screen-settings'); },
   relaunch: (): void => { ipcRenderer.send('assist:relaunch'); },
   openApp: (): void => { ipcRenderer.send('assist:open-app'); },
+  /** Plans and checkout in the main window, for errors a plan would fix. */
+  openCheckout: (): void => { ipcRenderer.send('assist:open-checkout'); },
 
   // Main → renderer. Each returns nothing; the renderer registers once at boot.
   onCapture: (fn: (info: CaptureInfo) => void): void => {

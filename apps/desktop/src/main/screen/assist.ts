@@ -35,6 +35,8 @@ export interface AssistError {
   /** Machine-readable so the overlay can style/act, not just print. */
   kind: 'signed-out' | 'no-subscription' | 'limit' | 'offline' | 'server';
   message: string;
+  /** Paying fixes it, so the overlay offers "See plans" (opens /checkout). */
+  upgrade?: boolean;
 }
 
 /**
@@ -72,10 +74,11 @@ export function readableStreamError(token: string): string {
   if (t === 'groq_daily_limit') return 'That model hit its daily limit. Switch models in MODUS or try again tomorrow.';
   if (t === 'provider_down') return 'The AI service is down for a moment. Try again shortly.';
   if (t === 'api_key_error') return 'MODUS has a configuration problem. Contact support.';
+  if (t === 'context_too_long') return 'This thread got too long. Press New and ask again.';
   return 'Something went wrong. Try again.';
 }
 
-function errorForStatus(status: number, body: string): AssistError {
+export function errorForStatus(status: number, body: string): AssistError {
   const code = (/"error"\s*:\s*"([a-z0-9_]+)"/.exec(body)?.[1] ?? '');
   if (status === 401) {
     return { kind: 'signed-out', message: 'Open MODUS and sign in, then try again.' };
@@ -85,12 +88,14 @@ function errorForStatus(status: number, body: string): AssistError {
     // got told its trial had ended, and Screen Assist always sends an image, so a
     // free account hits image_requires_subscription on the very first ask.
     if (code === 'free_limit_reached') {
-      return { kind: 'limit', message: "You've hit your free limit for now. It refreshes soon, or upgrade in MODUS." };
+      return { kind: 'limit', upgrade: true, message: "You've hit your free limit for now. It refreshes soon, or upgrade for more." };
     }
     if (code === 'image_requires_subscription') {
-      return { kind: 'no-subscription', message: 'Reading your screen needs a paid plan. Open MODUS to upgrade.' };
+      return { kind: 'no-subscription', upgrade: true, message: 'Reading your screen needs a paid plan.' };
     }
-    return { kind: 'no-subscription', message: 'Your trial or subscription has ended. Open MODUS to restart it.' };
+    // The route only sends the two codes above today (and there are no trials).
+    // Anything else on a 402 still means "a plan would fix this".
+    return { kind: 'no-subscription', upgrade: true, message: 'This needs a paid plan.' };
   }
   if (status === 429) {
     if (code === 'token_limit_reached') return { kind: 'limit', message: `You've hit your usage limit. ${resetPhrase(body)}` };
@@ -258,7 +263,7 @@ export interface AskOptions {
 export const SCREEN_PROMPT =
   'This is a screenshot of what I am looking at right now. '
   + 'Use it as the primary context for my question. '
-  + 'Be direct and specific about what is actually on the screen — quote exact text, names and values you can see. '
+  + 'Be direct and specific about what is actually on the screen: quote exact text, names and values you can see. '
   + 'If the screen does not contain what you would need to answer, say so plainly instead of guessing.';
 
 export const DEFAULT_QUESTION = "What's on my screen, and what should I do next?";
@@ -299,7 +304,7 @@ export function buildTurn(question: string, image?: string, withPrompt = false):
 export const WATCH_PROMPT =
   'These are two screenshots of my screen: the FIRST is how it looked before, the SECOND is how it looks now. '
   + 'Compare them and tell me, in one or two sentences, what actually changed and whether it needs my attention. '
-  + 'Only describe differences you can genuinely see between the two images — do not guess at what might have happened. '
+  + 'Only describe differences you can genuinely see between the two images. Do not guess at what might have happened. '
   + 'If nothing meaningful changed, reply with exactly "nothing to flag".';
 
 /** A watch turn: before frame, after frame, then the comparison instruction. */
@@ -423,7 +428,8 @@ export async function ask(opts: AskOptions, events: AssistEvents): Promise<void>
         // screenshot does not need the user's inbox, calendar, Apple Notes,
         // iMessage, contacts, long-term memory or Notion/Slack/GitHub/Drive — and
         // that bundle was ~5.6k tokens and several network round trips on EVERY
-        // message, which on a $24 plan's 500k/day ceiling is real money and real
+        // message, which against a paid plan's rolling 5 hour window and weekly
+        // cap (planCeilings in apps/web/lib/plan.ts) is real money and real
         // latency spent on nothing. See body.screenMode in app/api/chat/route.ts.
         screenMode: true,
       }),

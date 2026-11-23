@@ -227,6 +227,17 @@ export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
+/**
+ * Open the plan picker in the main window. The web /checkout page carries the
+ * real prices and Stripe, so the desktop never hard codes either.
+ */
+export function openCheckout(plan: 'modus' | 'pilot' = 'modus'): void {
+  if (!mainWindow) return;
+  const url = `${modusOrigin()}/checkout?plan=${plan}&from=paywall`;
+  mainWindow.loadURL(url).catch((err) => log.error('[window] could not open checkout', err));
+  showMainWindow();
+}
+
 export function showMainWindow(): void {
   if (!mainWindow) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
