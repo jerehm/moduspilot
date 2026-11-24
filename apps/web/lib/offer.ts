@@ -2,7 +2,8 @@
  * The $1 first month for Meta ad traffic (/start), Nov 24 to Dec 31 2026.
  *
  * Stripe holds the real discount: promotion code ONEDOLLAR on a $27-off coupon
- * that applies once, to the MODUS product only, for customers with no earlier
+ * that applies once, to the MODUS monthly product only (annual MODUS is a
+ * separate product, so the code can't touch it), for customers with no earlier
  * payment, and expires at ENDS_AT below. The page and the code end at the same
  * moment, so /start stops showing the offer by itself and nothing still says
  * "ends Dec 31" in January. To extend or end it, change Stripe first, then this.

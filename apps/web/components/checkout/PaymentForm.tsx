@@ -69,8 +69,8 @@ export default function PaymentForm({
     if (!promo.trim() || promoBusy) return;
     setPromoBusy(true);
     setPromoError('');
-    // The $1 offer is monthly only. Stripe can't tell it apart (its coupon is
-    // limited by product, and annual MODUS shares that product), so refuse it here.
+    // The $1 offer is monthly only. Stripe enforces that too (annual MODUS is its
+    // own product, outside the coupon); this just gives a clearer message.
     if (cadence !== 'monthly' && promo.trim().toUpperCase() === DOLLAR_OFFER.code) {
       setPromoError(`${DOLLAR_OFFER.code} is for monthly billing only. Switch to monthly to use it.`);
       setPromoBusy(false);
