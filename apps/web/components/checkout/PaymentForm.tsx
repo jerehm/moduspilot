@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { PaymentElement, useCheckoutElements } from '@stripe/react-stripe-js/checkout';
 import type { Cadence } from '@/lib/pricing';
+import { DOLLAR_OFFER } from '@/lib/offer';
 
 /**
  * The right-hand card: Stripe's Payment Element, a promo code field and the
@@ -26,6 +27,27 @@ export default function PaymentForm({
   const [promo, setPromo] = useState('');
   const [promoError, setPromoError] = useState('');
   const [promoBusy, setPromoBusy] = useState(false);
+  const autoPromoTried = useRef(false);
+
+  // The $1 ad offer: /start saves its code (lib/offer.ts) and it is applied here
+  // once, for MODUS monthly only. Stripe still decides: the code is limited to the
+  // MODUS product, first-time customers and its end date, so a code that doesn't
+  // fit is refused and quietly dropped, and the visitor can still type one in.
+  useEffect(() => {
+    if (result.type === 'loading' || result.type === 'error' || autoPromoTried.current) return;
+    autoPromoTried.current = true;
+    if (planName !== 'MODUS' || cadence !== 'monthly' || result.checkout.discountAmounts?.length) return;
+    let saved: { code?: string; exp?: number } | null = null;
+    try { saved = JSON.parse(localStorage.getItem(DOLLAR_OFFER.storageKey) || 'null'); } catch { return; }
+    if (!saved?.code || !saved.exp || Date.now() > saved.exp) return;
+    const code = saved.code;
+    setPromoBusy(true);
+    result.checkout.applyPromotionCode(code).then(r => {
+      if (r.type === 'error') {
+        try { localStorage.removeItem(DOLLAR_OFFER.storageKey); } catch { /* storage blocked */ }
+      }
+    }).catch(() => { /* leave the manual promo box as it was */ }).finally(() => setPromoBusy(false));
+  }, [result, planName, cadence]);
 
   if (result.type === 'loading') {
     return (
