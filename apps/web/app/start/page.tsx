@@ -1,12 +1,15 @@
 import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
-import Footer from '@/components/marketing/Footer';
+import HeroFilmWindow from '@/components/marketing/HeroFilmWindow';
+import { ClaudeLogo, logoForModel } from '@/components/marketing/ModelLogos';
+import { COMPARE_PROMPTS } from '@/components/marketing/compare-prompts';
 import { planCopy } from '@/lib/plan-copy';
 import { unlockedModels } from '@/lib/models';
 import { PLAN_PRICING } from '@/lib/pricing';
 import { DOLLAR_OFFER, dollarOfferActive } from '@/lib/offer';
 import RememberOffer from './RememberOffer';
+import StickyOfferCTA from './StickyOfferCTA';
 
 /**
  * /start: the landing page for the Meta ads (marketing/meta-ads/TRACKING.md).
@@ -15,10 +18,16 @@ import RememberOffer from './RememberOffer';
  * the first line matches the ad that was clicked. Everything else is the same
  * for everyone, so a winning ad means the ad won, not the page.
  *
+ * It is styled to look like the ads (marketing/meta-ads/batch-01): bold grotesk
+ * headline with one violet italic serif word, the MODUS PILOT wordmark, solid
+ * violet CTA and a violet MODUS price card. Someone who taps an ad should land
+ * on the same brand they just saw.
+ *
  * Every claim here comes from the same sources as the rest of the site: models
  * from lib/models.ts, features from lib/plan-copy.ts, price from lib/pricing.ts.
  * Rendered per request so the $1 offer switches off by itself when it ends.
- * Not indexed: it exists for ad traffic.
+ * Not indexed: it exists for ad traffic. No site nav or newsletter: the only
+ * way forward is the checkout.
  */
 
 export const dynamic = 'force-dynamic';
@@ -29,15 +38,18 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const HEADLINES: Record<string, string> = {
-  M03: 'One login for every model.',
-  M03B: 'One login for every model.',
-  M03C: 'One login for every model.',
-  M01: 'Every model for $28 a month.',
-  M02: 'Ask once. Compare three.',
-  M05: 'Every model. One app.',
+// Headline per ad: a bold lead plus one accent phrase in violet italic serif,
+// the same split the ads use ("for three.", "One app.").
+type Headline = { lead: string; accent: string };
+const HEADLINES: Record<string, Headline> = {
+  M03: { lead: 'One login for', accent: 'every model.' },
+  M03B: { lead: 'One login for', accent: 'every model.' },
+  M03C: { lead: 'One login for', accent: 'every model.' },
+  M01: { lead: 'Every model for', accent: '$28 a month.' },
+  M02: { lead: 'Ask once.', accent: 'Compare three.' },
+  M05: { lead: 'Every model.', accent: 'One app.' },
 };
-const DEFAULT_HEADLINE = 'Every model. One app.';
+const DEFAULT_HEADLINE: Headline = { lead: 'Every model.', accent: 'One app.' };
 
 // Each company's own top consumer plan, monthly billing, checked Nov 24 2026 on
 // chatgpt.com/pricing, claude.com/pricing and gemini.google/subscriptions. The
@@ -51,6 +63,11 @@ const OTHERS_TOTAL = OTHERS.reduce((s, o) => s + o.price, 0);
 
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
 
+// Solid violet pill, the ads' CTA. Not .btn-primary: inside .marketing that class
+// is forced to ink (globals.css).
+const BTN_VIOLET =
+  'inline-flex items-center justify-center gap-2 rounded-full bg-brand text-white font-semibold transition-opacity hover:opacity-90';
+
 type Search = Record<string, string | string[] | undefined>;
 
 function first(v: string | string[] | undefined): string {
@@ -63,9 +80,67 @@ function money(n: number): string {
 
 function Check() {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} className="w-4 h-4 shrink-0 mt-1 text-text" aria-hidden>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} className="w-4 h-4 shrink-0 mt-0.5 text-brand" aria-hidden>
       <path strokeLinecap="round" strokeLinejoin="round" d="M20 6 9 17l-5-5" />
     </svg>
+  );
+}
+
+function Wordmark() {
+  return (
+    <Link href="/" aria-label="MODUS home" className="inline-flex items-center gap-2.5">
+      <Image src="/logo.png" alt="" width={42} height={32} className="h-8 object-contain" style={{ width: "auto" }} priority />
+      <span className="flex flex-col leading-none">
+        <span className="text-[15px] font-bold tracking-[0.22em] text-text">MODUS</span>
+        <span className="text-[9px] font-semibold text-muted tracking-[0.3em] uppercase mt-1">Pilot</span>
+      </span>
+    </Link>
+  );
+}
+
+function HeadlineText({ h, className }: { h: Headline; className: string }) {
+  return (
+    <span className={className}>
+      {h.lead}{' '}
+      <span className="font-serif italic font-normal text-brand tracking-normal">{h.accent}</span>
+    </span>
+  );
+}
+
+/** The app's chat as a readable card, for phones. The live film is 1280px wide
+ *  and unreadable at phone width, so phones get this instead. */
+function PhoneChatCard({ models }: { models: string[] }) {
+  return (
+    <div className="mx-auto max-w-sm rounded-3xl border border-border bg-panel p-4 text-left shadow-[0_24px_60px_-28px_rgba(0,0,0,0.35)]">
+      <div className="flex items-center justify-between pb-3 border-b border-border">
+        <span className="flex items-center gap-2 text-xs font-bold tracking-[0.18em]">
+          <Image src="/logo.png" alt="" width={22} height={17} className="h-[17px] object-contain" style={{ width: "auto" }} />
+          MODUS
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted">
+          <span className="text-brand" aria-hidden>&#10022;</span> Auto
+        </span>
+      </div>
+      <div className="flex justify-end pt-4">
+        <p className="rounded-2xl rounded-br-md bg-brand text-white text-sm px-3.5 py-2 max-w-[85%]">
+          Plan a 3 day trip to Lisbon on a budget.
+        </p>
+      </div>
+      <p className="flex items-center gap-1.5 text-xs text-muted mt-4">
+        MODUS routed this to
+        <span className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-text">
+          <ClaudeLogo className="w-3 h-3" /> Claude
+        </span>
+      </p>
+      <div className="text-sm leading-relaxed mt-2 space-y-1.5">
+        <p><span className="font-semibold">Day 1:</span> Alfama and the castle, then sunset at a miradouro.</p>
+        <p><span className="font-semibold">Day 2:</span> Belém by tram 15. Pastéis de nata for under 2 euros.</p>
+        <p><span className="font-semibold">Day 3:</span> A day trip to Sintra by train.</p>
+      </div>
+      <p className="text-[11px] text-muted mt-4 pt-3 border-t border-border">
+        Also on this plan: {models.filter(m => !m.startsWith('Claude')).join(', ')}
+      </p>
+    </div>
   );
 }
 
@@ -75,8 +150,10 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
   const headline = HEADLINES[ad] ?? DEFAULT_HEADLINE;
   const offer = dollarOfferActive();
   const price = PLAN_PRICING.modus.monthlyPrice;
-  const models = unlockedModels('modus').map(m => m.name);
+  const modelList = unlockedModels('modus');
+  const models = modelList.map(m => m.name);
   const features = planCopy('modus').features;
+  const example = COMPARE_PROMPTS[0];
 
   // Same checkout link the ads used before, with the ad's UTMs carried along.
   const link = new URLSearchParams({ plan: 'modus', cadence: 'monthly' });
@@ -87,9 +164,9 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
   const href = `/login?${link.toString()}`;
 
   const cta = offer ? `Get your first month for $${DOLLAR_OFFER.firstMonth}` : 'Get MODUS';
-  const terms = offer
-    ? `$${DOLLAR_OFFER.firstMonth} for your first month, then $${price} a month. Cancel anytime.`
-    : `$${price} a month. Cancel anytime.`;
+  // With the offer on, the big "$1 first month, then $28/mo" line above the
+  // button already states the terms, so this line only adds the reassurance.
+  const terms = offer ? 'Cancel anytime. No contract.' : `$${price} a month. Cancel anytime.`;
 
   const faqs = [
     offer
@@ -102,9 +179,21 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
     { q: 'Which models do I get?', a: `${models.join(', ')}. Leave it on Auto and MODUS picks the model for each message, or pick one yourself.` },
   ];
 
-  const ctaBlock = (
-    <div>
-      <a href={href} className="btn-ink w-full sm:w-auto px-8 py-4 text-base">{cta}</a>
+  const ctaBlock = (id: string) => (
+    <div id={id}>
+      {offer ? (
+        <div className="flex items-center justify-center gap-3 mb-6">
+          <span className="font-grotesk !font-bold text-6xl sm:text-7xl tracking-tight leading-none">${DOLLAR_OFFER.firstMonth}</span>
+          <span className="text-left leading-snug">
+            <span className="block font-semibold">first month</span>
+            <span className="block text-sm text-muted">then ${price}/mo. Ends {DOLLAR_OFFER.endsLabel}.</span>
+          </span>
+        </div>
+      ) : null}
+      <a href={href} className={`${BTN_VIOLET} w-full sm:w-auto px-8 py-4 text-base`}>
+        {cta}
+        <span aria-hidden>&rarr;</span>
+      </a>
       <p className="text-sm text-muted mt-3">{terms}</p>
     </div>
   );
@@ -112,88 +201,137 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
   return (
     <div className="marketing marketing-light-tokens">
       {offer && <RememberOffer />}
+      <StickyOfferCTA href={href} label={cta} />
       <main className="bg-bg text-text min-h-screen overflow-x-hidden">
-        <header className="px-6 pt-6 max-w-5xl mx-auto flex items-center">
-          <Link href="/" aria-label="MODUS home">
-            <Image src="/logo.png" alt="MODUS" width={52} height={40} className="object-contain" priority />
-          </Link>
+        <header className="px-6 pt-6 max-w-5xl mx-auto flex items-center justify-between">
+          <Wordmark />
+          {offer && (
+            <span className="text-[11px] font-semibold tracking-[0.2em] uppercase text-brand">
+              ${DOLLAR_OFFER.firstMonth} first month
+            </span>
+          )}
         </header>
 
-        <section className="px-6 pt-14 sm:pt-20 pb-16 max-w-3xl mx-auto text-center">
-          {offer && (
-            <p className="inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 text-text text-sm font-medium px-4 py-1.5 mb-7">
-              <span>${DOLLAR_OFFER.firstMonth} first month</span>
-              <span className="text-muted">Ends {DOLLAR_OFFER.endsLabel}</span>
+        <section className="px-6 pt-12 sm:pt-20 pb-16 text-center">
+          <div className="max-w-3xl mx-auto">
+            <h1 className="font-grotesk !font-bold text-[2.75rem] leading-[1.02] sm:text-7xl !tracking-[-0.03em] mb-6 text-balance">
+              <HeadlineText h={headline} className="" />
+            </h1>
+            <p className="text-muted text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto mb-9">
+              GPT, Claude, Gemini, DeepSeek and Llama in one app. Leave it on Auto and MODUS picks the model for
+              each message, or pick one yourself.
             </p>
-          )}
-          <h1 className="font-serif text-5xl sm:text-7xl tracking-tight leading-[1.04] mb-6 text-balance">{headline}</h1>
-          <p className="text-muted text-lg sm:text-xl leading-relaxed max-w-2xl mx-auto mb-10">
-            GPT, Claude, Gemini, DeepSeek and Llama in one app. Leave it on Auto and MODUS picks the model for
-            each message, or pick one yourself.
-          </p>
-          {ctaBlock}
-          <ul className="flex flex-wrap justify-center gap-2 mt-12" aria-label="Models included">
-            {models.map(m => (
-              <li key={m} className="text-xs sm:text-sm rounded-full border border-border px-3 py-1 text-muted">{m}</li>
-            ))}
-          </ul>
+            {ctaBlock('hero-cta')}
+            <ul className="flex flex-wrap justify-center gap-2 mt-10" aria-label="Models included">
+              {modelList.map(m => {
+                const Logo = logoForModel(m.id);
+                return (
+                  <li key={m.id} className="inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-full border border-border bg-panel px-3 py-1.5">
+                    <Logo className="w-3.5 h-3.5" />
+                    {m.name}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+
+          <div className="mt-12 sm:hidden">
+            <PhoneChatCard models={models} />
+          </div>
+          <div className="hidden sm:block max-w-5xl mx-auto mt-16">
+            <HeroFilmWindow />
+          </div>
         </section>
 
-        <section className="px-6 py-16 border-t border-border">
+        <section className="px-6 py-16 sm:py-20 border-t border-border">
           <div className="max-w-5xl mx-auto">
-            <h2 className="font-serif text-3xl sm:text-5xl tracking-tight mb-4 text-center">Ask once. Compare three.</h2>
+            <h2 className="font-grotesk !font-bold text-4xl sm:text-6xl !tracking-[-0.03em] leading-[1.05] mb-4 text-center">
+              Ask once. <span className="font-serif italic font-normal text-brand tracking-normal">Compare three.</span>
+            </h2>
             <p className="text-muted text-lg max-w-2xl mx-auto text-center mb-10">
               Ask one question and get GPT, Claude and Gemini answering side by side. Keep the best answer and keep going.
             </p>
-            <div className="overflow-x-auto rounded-2xl border border-border bg-panel">
+
+            {/* Phones: stacked answers you can read. A 3 column screenshot is a sliver at 390px. */}
+            <div className="sm:hidden space-y-3">
+              <div className="flex justify-end">
+                <p className="rounded-2xl rounded-br-md bg-brand text-white text-sm px-3.5 py-2 max-w-[85%]">{example.q}</p>
+              </div>
+              {example.cols.map(c => {
+                const Logo = c.logo;
+                return (
+                  <div key={c.name} className="rounded-2xl border border-border bg-panel p-4">
+                    <p className="flex items-center gap-2 text-sm font-semibold mb-1.5">
+                      <Logo className="w-4 h-4" /> {c.name}
+                    </p>
+                    <p className="text-sm text-muted leading-relaxed">{c.answer}</p>
+                  </div>
+                );
+              })}
+              <p className="text-sm text-center pt-1">{example.verdict}</p>
+            </div>
+
+            <div className="hidden sm:block rounded-2xl border border-border bg-panel overflow-hidden shadow-[0_30px_80px_-40px_rgba(0,0,0,0.3)]">
               <Image
                 src="/marketing/compare-3-models.png"
                 alt="MODUS compare mode: the same question answered by GPT, Claude and Gemini side by side"
                 width={3467}
                 height={1488}
-                sizes="(max-width: 768px) 900px, 1024px"
-                className="block min-w-[900px] w-full h-auto"
+                sizes="1024px"
+                className="block w-full h-auto"
               />
             </div>
-            <p className="text-xs text-muted mt-3 text-center">A real MODUS screenshot. Swipe to see all three on a phone.</p>
+            <p className="hidden sm:block text-xs text-muted mt-3 text-center">A real MODUS screenshot.</p>
           </div>
         </section>
 
-        <section className="px-6 py-16 border-t border-border">
+        <section className="px-6 py-16 sm:py-20 border-t border-border">
           <div className="max-w-xl mx-auto">
-            <h2 className="font-serif text-3xl sm:text-5xl tracking-tight mb-10 text-center">The math</h2>
-            <div className="rounded-2xl border border-border bg-panel p-6 sm:p-8">
+            <h2 className="font-grotesk !font-bold text-4xl sm:text-6xl !tracking-[-0.03em] leading-[1.05] mb-10 text-center">
+              You&apos;re paying for <span className="font-serif italic font-normal text-brand tracking-normal">three.</span>
+            </h2>
+            <div className="border-t-2 border-text">
               {OTHERS.map(o => (
-                <div key={o.name} className="flex justify-between py-2 text-muted">
+                <div key={o.name} className="flex justify-between py-3.5 border-b border-border text-lg">
                   <span>{o.name}</span>
-                  <span>{money(o.price)} a month</span>
+                  <span className="tabular-nums">{money(o.price)}</span>
                 </div>
               ))}
-              <div className="flex justify-between py-3 mt-2 border-t border-border">
-                <span>All three</span>
-                <span>{money(OTHERS_TOTAL)} a month</span>
+              <div className="flex justify-between py-3.5 text-lg font-semibold">
+                <span>Every month</span>
+                <span className="tabular-nums text-muted line-through decoration-brand decoration-2">{money(OTHERS_TOTAL)}</span>
               </div>
-              <div className="flex justify-between py-3 border-t border-border text-lg font-semibold">
-                <span>MODUS, every model</span>
-                <span>{money(price)} a month</span>
-              </div>
-              {offer && (
-                <p className="text-sm text-muted text-right">${DOLLAR_OFFER.firstMonth} for your first month until {DOLLAR_OFFER.endsLabel}</p>
-              )}
             </div>
-            <p className="text-xs text-muted mt-3 leading-relaxed">
+            <div className="mt-4 rounded-2xl bg-brand text-white p-6 sm:p-7 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-bold tracking-[0.3em]">MODUS</p>
+                <p className="text-sm text-white/80 mt-1.5 leading-snug">GPT, Claude, Gemini, DeepSeek and Llama in one app.</p>
+                {offer && (
+                  <p className="inline-block mt-3 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold whitespace-nowrap">
+                    ${DOLLAR_OFFER.firstMonth} first month
+                  </p>
+                )}
+              </div>
+              <p className="shrink-0 font-grotesk !font-bold leading-none">
+                <span className="text-5xl tracking-tight">${price}</span>
+                <span className="text-base font-medium text-white/80">/mo</span>
+              </p>
+            </div>
+            <p className="text-xs text-muted mt-4 leading-relaxed">
               Monthly prices of each company&apos;s own plan, checked Nov 24 2026. MODUS gives you their models in one app,
               not each company&apos;s own app features.
             </p>
           </div>
         </section>
 
-        <section className="px-6 py-16 border-t border-border">
+        <section className="px-6 py-16 sm:py-20 border-t border-border">
           <div className="max-w-3xl mx-auto">
-            <h2 className="font-serif text-3xl sm:text-5xl tracking-tight mb-10 text-center">What you get with MODUS</h2>
-            <ul className="grid sm:grid-cols-2 gap-x-10 gap-y-4">
+            <h2 className="font-grotesk !font-bold text-4xl sm:text-6xl !tracking-[-0.03em] leading-[1.05] mb-10 text-center">
+              What you <span className="font-serif italic font-normal text-brand tracking-normal">get.</span>
+            </h2>
+            <ul className="grid sm:grid-cols-2 gap-3">
               {features.map(f => (
-                <li key={f} className="flex items-start gap-2.5">
+                <li key={f} className="flex items-start gap-3 rounded-xl border border-border bg-panel px-4 py-3.5">
                   <Check />
                   <span>{f}</span>
                 </li>
@@ -204,7 +342,7 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
 
         <section className="px-6 py-16 border-t border-border">
           <div className="max-w-2xl mx-auto">
-            <h2 className="font-serif text-3xl sm:text-4xl tracking-tight mb-8 text-center">Questions</h2>
+            <h2 className="font-grotesk !font-bold text-3xl sm:text-5xl !tracking-[-0.03em] mb-8 text-center">Questions</h2>
             <dl className="divide-y divide-border">
               {faqs.map(f => (
                 <div key={f.q} className="py-5">
@@ -217,11 +355,21 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
         </section>
 
         <section className="px-6 py-20 border-t border-border text-center">
-          <h2 className="font-serif text-4xl sm:text-6xl tracking-tight leading-[1.05] mb-8 text-balance">{headline}</h2>
-          {ctaBlock}
+          <h2 className="font-grotesk !font-bold text-4xl sm:text-6xl !tracking-[-0.03em] leading-[1.05] mb-10 text-balance max-w-3xl mx-auto">
+            <HeadlineText h={headline} className="" />
+          </h2>
+          {ctaBlock('final-cta')}
         </section>
 
-        <Footer />
+        <footer className="px-6 py-8 border-t border-border">
+          <div className="max-w-5xl mx-auto flex flex-wrap items-center justify-between gap-3 text-xs text-muted">
+            <span>&copy; {new Date().getFullYear()} Modus. All rights reserved.</span>
+            <span className="flex gap-4">
+              <a href="/privacy" className="hover:text-text">Privacy</a>
+              <a href="/terms" className="hover:text-text">Terms</a>
+            </span>
+          </div>
+        </footer>
       </main>
     </div>
   );
