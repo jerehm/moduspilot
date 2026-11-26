@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import HeroFilmWindow from '@/components/marketing/HeroFilmWindow';
-import { ClaudeLogo, logoForModel } from '@/components/marketing/ModelLogos';
+import { ClaudeLogo, DeepSeekLogo, GeminiLogo, GrokLogo, MetaLogo, OpenAILogo } from '@/components/marketing/ModelLogos';
 import { COMPARE_PROMPTS } from '@/components/marketing/compare-prompts';
 import { planCopy } from '@/lib/plan-copy';
 import { unlockedModels } from '@/lib/models';
@@ -60,6 +60,22 @@ const OTHERS = [
   { name: 'Google AI Pro', price: 19.99 },
 ];
 const OTHERS_TOTAL = OTHERS.reduce((s, o) => s + o.price, 0);
+
+// The hero chips name the brands people know, not model versions. Built from
+// the providers actually on the MODUS plan (lib/models.ts), so a brand only shows
+// once its models are really included. Order is how people rank them.
+type Brand = { provider: string; name: string; logo: typeof ClaudeLogo };
+const BRANDS: Brand[] = [
+  { provider: 'OpenAI', name: 'ChatGPT', logo: OpenAILogo },
+  { provider: 'Anthropic', name: 'Claude', logo: ClaudeLogo },
+  { provider: 'Google', name: 'Gemini', logo: GeminiLogo },
+  { provider: 'DeepSeek', name: 'DeepSeek', logo: DeepSeekLogo },
+  { provider: 'Meta', name: 'Llama', logo: MetaLogo },
+  { provider: 'xAI', name: 'Grok', logo: GrokLogo },
+];
+// Announced but not in the catalog yet: shown with a "Soon" tag. Drops off by
+// itself once lib/models.ts gives MODUS a model from this provider.
+const COMING_SOON = ['xAI'];
 
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
 
@@ -152,6 +168,11 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
   const price = PLAN_PRICING.modus.monthlyPrice;
   const modelList = unlockedModels('modus');
   const models = modelList.map(m => m.name);
+  const providers = new Set(modelList.map(m => m.provider));
+  const brands = BRANDS.filter(b => providers.has(b.provider) || COMING_SOON.includes(b.provider)).map(b => ({
+    ...b,
+    soon: !providers.has(b.provider),
+  }));
   const features = planCopy('modus').features;
   const example = COMPARE_PROMPTS[0];
 
@@ -223,12 +244,16 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
             </p>
             {ctaBlock('hero-cta')}
             <ul className="flex flex-wrap justify-center gap-2 mt-10" aria-label="Models included">
-              {modelList.map(m => {
-                const Logo = logoForModel(m.id);
+              {brands.map(b => {
+                const Logo = b.logo;
                 return (
-                  <li key={m.id} className="inline-flex items-center gap-1.5 text-xs sm:text-sm rounded-full border border-border bg-panel px-3 py-1.5">
-                    <Logo className="w-3.5 h-3.5" />
-                    {m.name}
+                  <li
+                    key={b.provider}
+                    className={`inline-flex items-center gap-1.5 text-sm rounded-full border border-border px-3.5 py-1.5 ${b.soon ? 'text-muted' : 'bg-panel'}`}
+                  >
+                    <Logo className="w-4 h-4" />
+                    {b.name}
+                    {b.soon && <span className="text-[10px] font-semibold uppercase tracking-wider text-brand">Soon</span>}
                   </li>
                 );
               })}
