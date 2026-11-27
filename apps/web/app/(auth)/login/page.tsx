@@ -166,10 +166,15 @@ export default function LoginPage() {
   const [inApp, setInApp] = useState(false);
   // Inside the Instagram or Facebook app: Apple and email go first, plus a note.
   const [metaApp, setMetaApp] = useState(false);
+  // Meta ad visitors (utm_source=meta) came for the $1 MODUS offer. The plans
+  // section below sign-in says "Start free, then $28/mo" and shows PILOT, which
+  // contradicts the ad, so it is hidden for them. Everyone else still sees it.
+  const [metaAdVisitor, setMetaAdVisitor] = useState(false);
 
   useEffect(() => {
     setIsDesktop(typeof navigator !== 'undefined' && navigator.userAgent.includes('MODUSDesktop'));
     setMetaApp(isMetaInAppBrowser());
+    setMetaAdVisitor(new URLSearchParams(window.location.search).get('utm_source') === 'meta');
     // The $1 offer travels in the link (promo=ONEDOLLAR from /start). Save it
     // for checkout, but only the real code while the offer is running.
     if (isLiveDollarCode(new URLSearchParams(window.location.search).get('promo'))) rememberDollarOffer();
@@ -652,12 +657,14 @@ export default function LoginPage() {
         </div>
 
         {/* Revealed on scroll, like the Claude sign-in: the actual plans. */}
+        {!metaAdVisitor && (
         <div className="pb-8">
           <div className="text-center mb-2 pt-4">
             <h2 className="font-serif text-3xl sm:text-4xl font-medium text-text">Explore plans</h2>
           </div>
           <HomePricingSection showHeading={false} />
         </div>
+        )}
       </div>
     </>
   );

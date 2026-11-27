@@ -199,7 +199,7 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
       : { q: 'When am I charged?', a: `Your card is charged $${price} when you subscribe, then every month until you cancel.` },
     { q: 'Can I cancel anytime?', a: 'Yes. Cancel from Settings, Billing and you keep full access until the end of the billing period. After that you drop back to the free tier. Nothing is deleted.' },
     ...(offer
-      ? [{ q: `Who gets the $${DOLLAR_OFFER.firstMonth} month?`, a: `New MODUS subscribers on monthly billing, until ${DOLLAR_OFFER.endsLabel} at 11:59 pm Pacific. The code ${DOLLAR_OFFER.code} is added at checkout for you. If it isn't, type it in the promo code box.` }]
+      ? [{ q: `Who gets the $${DOLLAR_OFFER.firstMonth} month?`, a: `New customers on MODUS monthly billing, until ${DOLLAR_OFFER.endsLabel} at 11:59 pm Pacific. The $${DOLLAR_OFFER.firstMonth} price is applied at checkout for you, and you'll see $${DOLLAR_OFFER.firstMonth} due today before you pay.` }]
       : []),
     { q: 'Which models do I get?', a: `${models.join(', ')}. Leave it on Auto and MODUS picks the model for each message, or pick one yourself.` },
   ];
