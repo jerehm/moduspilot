@@ -21,3 +21,36 @@ export const DOLLAR_OFFER = {
 export function dollarOfferActive(now: number = Date.now()): boolean {
   return now <= DOLLAR_OFFER.endsAt;
 }
+
+/** True when `code` is the live $1 offer code (case-insensitive) and the offer is still running. */
+export function isLiveDollarCode(code: string | null | undefined, now: number = Date.now()): boolean {
+  return !!code && code.trim().toUpperCase() === DOLLAR_OFFER.code && dollarOfferActive(now);
+}
+
+/**
+ * Browser only. Saves the $1 code where checkout looks for it. Used by /start
+ * (RememberOffer) and by /login when the link carries promo=ONEDOLLAR, so the
+ * offer survives the email sign-in link opening in another browser.
+ */
+export function rememberDollarOffer(): void {
+  try {
+    localStorage.setItem(DOLLAR_OFFER.storageKey, JSON.stringify({ code: DOLLAR_OFFER.code, exp: DOLLAR_OFFER.endsAt }));
+  } catch { /* storage blocked: the code can still be typed at checkout */ }
+}
+
+/** Browser only. True when the $1 code is saved and not past its end. */
+export function hasSavedDollarOffer(now: number = Date.now()): boolean {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DOLLAR_OFFER.storageKey) || 'null') as { code?: string; exp?: number } | null;
+    return !!saved?.code && !!saved.exp && now <= saved.exp && isLiveDollarCode(saved.code, now);
+  } catch { return false; }
+}
+
+/**
+ * The Meta ad path: /start sends people to /login with plan=modus,
+ * cadence=monthly and utm_source=meta. A new account on this path skips the
+ * pre-payment onboarding and goes straight to checkout (see app/(auth)/login).
+ */
+export function isMetaAdPath(q: URLSearchParams): boolean {
+  return q.get('plan') === 'modus' && q.get('cadence') === 'monthly' && q.get('utm_source') === 'meta';
+}

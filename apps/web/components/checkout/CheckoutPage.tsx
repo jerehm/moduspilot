@@ -23,6 +23,7 @@ import { planCopy } from '@/lib/plan-copy';
 import AnimatedPrice from '@/components/marketing/AnimatedPrice';
 import CadenceToggle from '@/components/marketing/CadenceToggle';
 import PaymentForm from './PaymentForm';
+import { DOLLAR_OFFER, hasSavedDollarOffer } from '@/lib/offer';
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '');
 
@@ -40,7 +41,11 @@ function startSession(key: string, run: () => Promise<StartResult>): Promise<Sta
 }
 
 type PaidPlan = 'modus' | 'pilot';
-type From = 'onboarding' | 'settings' | 'paywall';
+// 'start' is the Meta ad path (/start, sign in, straight here). The Stripe route
+// only knows onboarding, settings and paywall, and start behaves like onboarding
+// there: success returns to /dashboard?checkout_completed=1, where Subscribe
+// fires and the one-time "about you" step shows (components/AboutYouGate).
+type From = 'onboarding' | 'settings' | 'paywall' | 'start';
 
 // Matches the login inputs (bg-bg/60, hairline border, 12px radius, violet focus).
 function appearance(dark: boolean): Appearance {
@@ -117,7 +122,11 @@ export default function CheckoutPage() {
 
   const [plan, setPlan] = useState<PaidPlan>(() => (params.get('plan') === 'pilot' ? 'pilot' : 'modus'));
   const fromParam = params.get('from');
-  const from: From = fromParam === 'onboarding' || fromParam === 'paywall' ? fromParam : 'settings';
+  const from: From = fromParam === 'onboarding' || fromParam === 'paywall' || fromParam === 'start' ? fromParam : 'settings';
+  const adPath = from === 'start';
+  const apiFrom = adPath ? 'onboarding' : from;
+  // Set by PaymentForm once Stripe has applied the $1 code to this session.
+  const [dollarApplied, setDollarApplied] = useState(false);
 
   const [cadence, setCadence] = useState<Cadence>(() => {
     const c = params.get('cadence');
@@ -171,9 +180,15 @@ export default function CheckoutPage() {
     const id = ++requestId.current;
     setClientSecret(null);
     setStartError('');
+    // A new session starts undiscounted until PaymentForm says otherwise, so a
+    // plan or cadence switch never shows the old session's "$1 today" line.
+    setDollarApplied(false);
     (async () => {
       try {
-        const data = await startSession(`${plan}:${cadence}:${from}`, async () => {
+        // The saved $1 code goes to the server, which attaches it to the session
+        // (Stripe refuses it when applied from the browser). MODUS monthly only.
+        const promo = plan === 'modus' && cadence === 'monthly' && hasSavedDollarOffer() ? DOLLAR_OFFER.code : undefined;
+        const data = await startSession(`${plan}:${cadence}:${apiFrom}:${promo ?? ''}`, async () => {
           const token = await user.getIdToken();
           // The server locks one checkout start per user. A second start that
           // arrives while the first is creating its session gets 409
@@ -183,7 +198,7 @@ export default function CheckoutPage() {
             const res = await fetch('/api/stripe/checkout', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-              body: JSON.stringify({ plan, cadence, ui: 'elements', from }),
+              body: JSON.stringify({ plan, cadence, ui: 'elements', from: apiFrom, promo }),
             });
             const body = await res.json().catch(() => ({}));
             if (body.code === 'checkout_in_progress' && tries < 6) { await new Promise(r => setTimeout(r, 2000)); continue; }
@@ -199,7 +214,7 @@ export default function CheckoutPage() {
         if (id === requestId.current) setStartError(e instanceof Error ? e.message : 'Checkout could not start. Try again.');
       }
     })();
-  }, [user, plan, cadence, from, router, attempt]);
+  }, [user, plan, cadence, apiFrom, router, attempt]);
 
   const copy = planCopy(plan);
   const price = PLAN_PRICING[plan];
@@ -212,7 +227,9 @@ export default function CheckoutPage() {
     elementsOptions: { appearance: appearance(dark), fonts: FONTS },
   } : null, [clientSecret, dark]);
 
-  const backHref = from === 'onboarding' ? '/onboarding?checkout=1' : from === 'paywall' ? '/chat' : '/settings?tab=billing';
+  // Leaving the ad path checkout lands on the plan step (?trial=1), which still
+  // offers the free tier, so nobody dead-ends without access.
+  const backHref = from === 'onboarding' ? '/onboarding?checkout=1' : adPath ? '/onboarding?trial=1' : from === 'paywall' ? '/chat' : '/settings?tab=billing';
 
   return (
     <div className={`marketing ${dark ? 'marketing-dark-tokens' : 'marketing-light-tokens'} relative min-h-screen w-full bg-bg text-text`}>
@@ -230,6 +247,8 @@ export default function CheckoutPage() {
 
           {/* Switch plans without leaving checkout. A new Stripe session is made
               for the new plan; the server expires the old one. */}
+          {/* The ad sold MODUS, so the ad path shows MODUS only (no PILOT card). */}
+          {!adPath && (
           <div role="radiogroup" aria-label="Plan" className="mt-6 flex gap-3 max-w-md">
             {(['modus', 'pilot'] as PaidPlan[]).map(id => {
               const active = id === plan;
@@ -262,6 +281,7 @@ export default function CheckoutPage() {
               );
             })}
           </div>
+          )}
 
           <div className="mt-8 flex items-baseline gap-1">
             <AnimatedPrice
@@ -272,7 +292,9 @@ export default function CheckoutPage() {
             <span className="text-muted text-lg">/mo</span>
           </div>
           <p className="text-sm text-muted mt-1">
-            {annual ? `Billed annually at $${price.annualTotal}.` : 'Billed monthly.'}
+            {dollarApplied && !annual
+              ? `$${DOLLAR_OFFER.firstMonth} today, then $${price.monthlyPrice} a month. Cancel anytime.`
+              : annual ? `Billed annually at $${price.annualTotal}.` : 'Billed monthly.'}
           </p>
 
           <div className="mt-6 flex">
@@ -318,6 +340,7 @@ export default function CheckoutPage() {
                 planName={copy.name}
                 dueToday={dueToday}
                 cadence={cadence}
+                onDollarApplied={setDollarApplied}
               />
             </CheckoutElementsProvider>
           )}

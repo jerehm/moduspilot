@@ -5,6 +5,7 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { isCadence, resolvePlanPrice, type Cadence } from '@/lib/pricing';
 import { ELEMENTS_API_VERSION } from '@/lib/stripe-elements';
 import { ensureUserDoc, resolveStripeCustomer, findLivePlanSubscription, stripeId, acquireCheckoutLock, customerIdsForUser } from '@/lib/billing';
+import { DOLLAR_OFFER, isLiveDollarCode } from '@/lib/offer';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://app.moduspilot.com';
 
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { plan?: unknown; returnTo?: unknown; cadence?: unknown; quantity?: unknown; ui?: unknown; from?: unknown };
+  let body: { plan?: unknown; returnTo?: unknown; cadence?: unknown; quantity?: unknown; ui?: unknown; from?: unknown; promo?: unknown };
   try { body = await req.json(); }
   catch { return Response.json({ error: 'Invalid checkout request' }, { status: 400 }); }
   if (!body || typeof body.plan !== 'string') return Response.json({ error: 'Invalid plan' }, { status: 400 });
@@ -51,6 +52,15 @@ export async function POST(req: Request) {
   // Our own page only sells plans. The add-on keeps Stripe's hosted page, which
   // is what gives it the adjustable quantity control.
   const elementsUi = body.ui === 'elements' && !isAddon;
+  // The $1 Meta offer (lib/offer.ts). Stripe.js refuses to apply ONEDOLLAR from
+  // the browser on our elements checkout ("This promotion code is invalid",
+  // 0 redemptions since launch), while Stripe accepts the same code attached at
+  // session creation. So the page sends the saved code and we attach it here.
+  // Stripe still enforces every rule on the code itself: MODUS product only,
+  // first-time customers only, its end date. Access is still granted only by the
+  // webhook on metadata.plan, never on the amount paid.
+  const dollarOffer = elementsUi && plan === 'modus' && cadence === 'monthly'
+    && isLiveDollarCode(typeof body.promo === 'string' ? body.promo : null);
 
   // Never let a later write hit `5 NOT_FOUND` on a users doc that doesn't exist yet.
   await ensureUserDoc(uid, email);
@@ -135,7 +145,9 @@ export async function POST(req: Request) {
     // keeps firing Subscribe exactly as before). There is no cancel URL: leaving
     // the page is cancelling.
     const returnUrl = `${APP_URL}/checkout/return?session_id={CHECKOUT_SESSION_ID}&from=${from}`;
-    const intent = createHash('sha256').update(JSON.stringify([uid, existingCustomerId, priceId, quantity, 'elements', from])).digest('hex');
+    // The offer is part of the intent, so a full-price open session is never
+    // handed back to someone who arrived with the $1 code (or the reverse).
+    const intent = createHash('sha256').update(JSON.stringify([uid, existingCustomerId, priceId, quantity, 'elements', from, dollarOffer ? DOLLAR_OFFER.code : ''])).digest('hex');
     const reqOpts = { apiVersion: ELEMENTS_API_VERSION };
     const openSessions = await stripe.checkout.sessions.list({ customer: existingCustomerId, status: 'open', limit: 100 }, reqOpts);
     // List results omit client_secret, so fetch the matching session itself.
@@ -165,7 +177,7 @@ export async function POST(req: Request) {
     for (const other of allOpen.filter(o => o.metadata?.plan)) {
       await stripe.checkout.sessions.expire(other.id, {}, reqOpts).catch(() => { /* already completed or expired */ });
     }
-    const session = await stripe.checkout.sessions.create({
+    const baseParams: Stripe.Checkout.SessionCreateParams = {
       // 'elements' is newer than this SDK's types; the per-request API version makes it valid.
       ui_mode: 'elements' as unknown as Stripe.Checkout.SessionCreateParams.UiMode,
       mode: 'subscription',
@@ -177,10 +189,28 @@ export async function POST(req: Request) {
       payment_method_collection: 'always',
       allow_promotion_codes: true,
       metadata: { ...subMetadata, checkoutIntent: intent },
-    }, { ...reqOpts, // Short window on purpose: it only has to absorb a double submit. A
-      // 30 minute window (the hosted path's) hands back a session that was
-      // already PAID when someone cancels and buys again soon after.
-      idempotencyKey: `checkout-el:${intent}:${Math.floor(Date.now() / 10_000)}` });
+    };
+    // Short window on purpose: it only has to absorb a double submit. A 30 minute
+    // window (the hosted path's) hands back a session that was already PAID when
+    // someone cancels and buys again soon after.
+    const idemBase = `checkout-el:${intent}:${Math.floor(Date.now() / 10_000)}`;
+    let session: Stripe.Checkout.Session | null = null;
+    if (dollarOffer) {
+      // Stripe allows either discounts or allow_promotion_codes, not both. If the
+      // code can't apply to this customer (not a first-time customer, code
+      // ended), Stripe refuses the create and we fall back to the normal session.
+      const promo = await stripe.promotionCodes.list({ code: DOLLAR_OFFER.code, active: true, limit: 1 }).catch(() => null);
+      const promoId = promo?.data[0]?.id;
+      if (promoId) {
+        const { allow_promotion_codes: _allow, ...withoutPromoField } = baseParams;
+        void _allow;
+        session = await stripe.checkout.sessions.create(
+          { ...withoutPromoField, discounts: [{ promotion_code: promoId }] },
+          { ...reqOpts, idempotencyKey: `${idemBase}:offer` },
+        ).catch(() => null);
+      }
+    }
+    if (!session) session = await stripe.checkout.sessions.create(baseParams, { ...reqOpts, idempotencyKey: idemBase });
     if (!session.client_secret) return Response.json({ error: 'Checkout could not start. Try again.' }, { status: 502 });
     return Response.json({ clientSecret: session.client_secret });
   }

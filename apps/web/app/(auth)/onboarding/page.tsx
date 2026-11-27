@@ -12,8 +12,8 @@ import {
   doc, getDoc,
 } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { seedOnboardingAccount } from '@/lib/onboarding';
-import { trackMetaWithServer } from '@/lib/meta-pixel';
+import { ROLE_OPTIONS, indexOnboardingMemories, seedOnboardingAccount } from '@/lib/onboarding';
+import { DOLLAR_OFFER, hasSavedDollarOffer } from '@/lib/offer';
 import { isPaidPlan } from '@/lib/plan';
 import { CADENCE_STORAGE_KEY, PLAN_PRICING, isCadence, type Cadence } from '@/lib/pricing';
 
@@ -34,8 +34,6 @@ function questionScreens(alreadyPaid: boolean): Screen[] {
 type PlanId = 'free' | 'modus' | 'pilot';
 
 // ── data ───────────────────────────────────────────────────────────────────────
-// Text only. The emoji read as clip-art next to a serif headline.
-const ROLE_OPTIONS = ['Founder / builder', 'Executive / manager', 'Professional', 'Student', 'Other'];
 const AGE_OPTIONS = ['18-24', '25-34', '35-44', '45-54', '55+'];
 // "Prefer not to say" is a real option, not a fallback — nothing downstream
 // requires gender, it only sharpens personalContext when volunteered.
@@ -283,9 +281,10 @@ const PLAN_OPTIONS: { id: PlanId; name: string; tagline: string; popular?: boole
   },
 ];
 
-function PlanStep({ selected, setSelected, cadence, setCadence }: {
+function PlanStep({ selected, setSelected, cadence, setCadence, dollarOffer }: {
   selected: PlanId; setSelected: (v: PlanId) => void;
   cadence: Cadence; setCadence: (c: Cadence) => void;
+  dollarOffer: boolean;
 }) {
   const annual = cadence === 'annual';
   return (
@@ -335,6 +334,11 @@ function PlanStep({ selected, setSelected, cadence, setCadence }: {
                   {annual && p.id !== 'free' && (
                     <p className="text-[10px] text-muted whitespace-nowrap">
                       ${PLAN_PRICING[p.id].annualTotal} billed yearly
+                    </p>
+                  )}
+                  {!annual && p.id === 'modus' && dollarOffer && (
+                    <p className="text-[10px] font-semibold text-brand whitespace-nowrap">
+                      ${DOLLAR_OFFER.firstMonth} first month
                     </p>
                   )}
                 </div>
@@ -556,7 +560,10 @@ function OnboardingContent() {
   // same cadence that checkout will CHARGE — those two drifting apart is how you
   // show someone $24/mo and bill their card $240.
   const [cadence, setCadence] = useState<Cadence>('monthly');
+  // Read after mount (localStorage), so the server render and first paint match.
+  const [dollarOfferSaved, setDollarOfferSaved] = useState(false);
   useEffect(() => {
+    setDollarOfferSaved(hasSavedDollarOffer());
     try {
       const stored = window.localStorage.getItem(CADENCE_STORAGE_KEY);
       if (isCadence(stored)) setCadence(stored);
@@ -635,16 +642,11 @@ function OnboardingContent() {
   // Idempotent: a trial re-entry (?trial=1) or a second tap is already onboarded,
   // so it must not duplicate the seeded habit/memories.
   async function seedAccount() {
+    // CompleteRegistration is no longer sent here: it fires when the account is
+    // created at sign-in (app/(auth)/login), so the Meta ad path, which skips
+    // this page before paying, still reports it.
     const memories = await seedOnboardingAccount(user!.uid, { name, role, age, gender });
-    if (memories.length > 0) {
-      // First completed setup only (memories come back empty on a re-entry), so
-      // each account is one Meta signup. Fire and forget: never blocks setup.
-      void trackMetaWithServer('CompleteRegistration', () => user!.getIdToken());
-      // Vector indexing is supplementary. Durable memories are already saved.
-      void user!.getIdToken().then(token => Promise.all(memories.map(text => fetch('/api/memory/upsert', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ text }),
-      })))).catch(() => {});
-    }
+    indexOnboardingMemories(() => user!.getIdToken(), memories);
   }
 
   async function handleFinish() {
@@ -684,6 +686,9 @@ function OnboardingContent() {
   const screens = questionScreens(alreadyPaid);
   const stepIndex = screens.indexOf(screen) + 1;
   const selectedPlanName = PLAN_OPTIONS.find(p => p.id === selectedPlan)?.name ?? 'MODUS';
+  // The $1 code saved from /start applies at checkout to MODUS monthly only.
+  const dollarOffer = dollarOfferSaved;
+  const dollarApplies = dollarOffer && selectedPlan === 'modus' && cadence === 'monthly';
 
   // ── welcome ────────────────────────────────────────────────────────────────
   if (screen === 'welcome') {
@@ -709,7 +714,13 @@ function OnboardingContent() {
             alreadyPaid={alreadyPaid}
             onEnter={startCheckout}
             saving={saving}
-            chargeLabel={selectedPlan === 'free' ? 'No card required' : cadence === 'annual' ? `$${PLAN_PRICING[selectedPlan].annualTotal} billed yearly at checkout` : `$${PLAN_PRICING[selectedPlan].monthlyPrice}/mo billed at checkout`}
+            chargeLabel={selectedPlan === 'free'
+              ? 'No card required'
+              : dollarApplies
+                ? `$${DOLLAR_OFFER.firstMonth} today, then $${PLAN_PRICING.modus.monthlyPrice} a month. Cancel anytime.`
+                : cadence === 'annual'
+                  ? `$${PLAN_PRICING[selectedPlan].annualTotal} billed yearly at checkout`
+                  : `$${PLAN_PRICING[selectedPlan].monthlyPrice}/mo billed at checkout`}
           />
           {!alreadyPaid && selectedPlan !== 'free' && <button onClick={handleContinueFree} disabled={saving} className="block mx-auto text-sm text-muted underline">Continue free</button>}
         </div>
@@ -750,7 +761,7 @@ function OnboardingContent() {
               transition={slideTx}
             >
               {screen === 'you'    && <YouStep name={name} setName={setName} role={role} setRole={setRole} age={age} setAge={setAge} gender={gender} setGender={setGender} />}
-              {screen === 'plan'   && <PlanStep selected={selectedPlan} setSelected={setSelectedPlan} cadence={cadence} setCadence={chooseCadence} />}
+              {screen === 'plan'   && <PlanStep selected={selectedPlan} setSelected={setSelectedPlan} cadence={cadence} setCadence={chooseCadence} dollarOffer={dollarOffer} />}
             </motion.div>
           </AnimatePresence>
 

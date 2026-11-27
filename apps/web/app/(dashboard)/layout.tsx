@@ -13,6 +13,7 @@ import CommandBar from '@/components/ui/CommandBar';
 import { useMobileConnected } from '@/hooks/useMobileConnected';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { MetaCheckoutTracker } from '@/components/MetaCheckoutTracker';
+import { AboutYouGate } from '@/components/AboutYouGate';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 
 // Minimal inline SVG icons — stroke-based, 24x24 viewBox
@@ -643,6 +644,7 @@ function DashboardLayoutInner({ children }: { children: React.ReactNode }) {
 
       <CommandBar open={cmdOpen} onClose={() => setCmdOpen(false)} user={user} />
       <MetaCheckoutTracker user={user} />
+      <AboutYouGate user={user} />
     </div>
   );
 }

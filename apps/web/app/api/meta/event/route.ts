@@ -9,7 +9,9 @@ import { sendCapiEvent } from '@/lib/meta-capi';
  * The client only calls this when the visitor allowed ad tracking (see
  * lib/meta-pixel.ts). The server checks the claim against our own data before
  * reporting it, so nobody can feed Meta a fake signup or subscription:
- * - CompleteRegistration: the users doc must have onboardingComplete.
+ * - CompleteRegistration: the Firebase account must be new (created within
+ *   REGISTRATION_WINDOW_MS). It fires when the account is created at sign-in,
+ *   before payment, so the ad path (/start straight to checkout) still reports it.
  * - Subscribe: the users doc must carry a paid plan, which only the Stripe
  *   webhook writes. If the webhook has not landed yet, answer retry:true.
  *
@@ -18,6 +20,9 @@ import { sendCapiEvent } from '@/lib/meta-capi';
 
 const EVENTS = new Set(['CompleteRegistration', 'Subscribe']);
 const SITE = 'https://moduspilot.com';
+// A sign-in reports CompleteRegistration only for an account this new, so an
+// existing user signing in again is never counted as a new signup.
+const REGISTRATION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 export async function POST(req: Request) {
   const auth = await requireAuth(req);
@@ -34,9 +39,11 @@ export async function POST(req: Request) {
 
   const userRef = adminDb.collection('users').doc(uid);
   const user = (await userRef.get()).data();
+  const authUser = await adminAuth.getUser(uid).catch(() => null);
   let customData: Record<string, unknown> | undefined;
   if (event === 'CompleteRegistration') {
-    if (user?.onboardingComplete !== true) return Response.json({ ok: false });
+    const created = Date.parse(authUser?.metadata.creationTime ?? '');
+    if (!Number.isFinite(created) || Date.now() - created > REGISTRATION_WINDOW_MS) return Response.json({ ok: false });
   } else {
     if (!isPaidPlan(user?.plan)) return Response.json({ ok: false, retry: true });
     customData = { content_name: user!.plan };
@@ -59,7 +66,7 @@ export async function POST(req: Request) {
 
   const str = (v: unknown, max: number) => (typeof v === 'string' && v.length > 0 && v.length <= max ? v : undefined);
   const sourceUrl = str(body.sourceUrl, 2000);
-  const email = await adminAuth.getUser(uid).then(u => u.email ?? undefined).catch(() => undefined);
+  const email = authUser?.email ?? undefined;
 
   const ok = await sendCapiEvent({
     eventName: event,

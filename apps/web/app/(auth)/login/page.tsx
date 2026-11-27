@@ -22,6 +22,8 @@ import { motion } from 'framer-motion';
 import { AnimatedThemeToggler } from '@/components/ui/animated-theme-toggler';
 import HomePricingSection from '@/components/marketing/HomePricingSection';
 import type { User, OAuthCredential } from 'firebase/auth';
+import { isLiveDollarCode, isMetaAdPath, rememberDollarOffer } from '@/lib/offer';
+import { trackMetaWithServer } from '@/lib/meta-pixel';
 
 // Which provider a stored Firebase sign-in method maps to, for the "you already
 // use this email with X" message when two providers share one email.
@@ -68,17 +70,54 @@ function pickedPlan(): string {
   return `plan=${plan}&cadence=${cadence}`;
 }
 
+// Params the emailed sign-in link must keep, so the person who opens it lands
+// on the same plan, offer and ad attribution they started with.
+const CARRIED_PARAMS = ['next', 'plan', 'cadence', 'promo', 'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+
+// An account this young was created by this sign-in. Generous enough for an
+// email link opened a few minutes later; the server allows 24 hours and reports
+// each account once, so a repeat call is harmless.
+const NEW_ACCOUNT_MS = 15 * 60 * 1000;
+let registrationReported = false;
+
+/**
+ * CompleteRegistration fires when the account is first created, before any
+ * payment, so the ad path (straight to checkout) still reports it. Fire and
+ * forget: it never delays the redirect. app/api/meta/event checks the account
+ * really is new and reports it once.
+ */
+function reportRegistrationIfNew(user: User) {
+  if (registrationReported) return;
+  const created = Date.parse(user.metadata.creationTime ?? '');
+  if (!Number.isFinite(created) || Date.now() - created > NEW_ACCOUNT_MS) return;
+  registrationReported = true;
+  void trackMetaWithServer('CompleteRegistration', () => user.getIdToken());
+}
+
 async function getDestination(user: User): Promise<string> {
+  reportRegistrationIfNew(user);
   const next = safeNext();
   if (next) return next;
   const picked = pickedPlan();
+  const adPath = typeof window !== 'undefined' && isMetaAdPath(new URLSearchParams(window.location.search));
   try {
     const snap = await getDoc(doc(db, 'users', user.uid));
     if (snap.data()?.onboardingComplete) return picked ? `/checkout?${picked}&from=settings` : '/dashboard';
+    // Meta ad path: no welcome, questions or plan picker before paying. The
+    // "about you" step shows once after payment (components/AboutYouGate).
+    if (adPath) return '/checkout?plan=modus&cadence=monthly&from=start';
     return picked ? `/onboarding?${picked}` : '/onboarding';
   } catch {
+    if (adPath) return '/checkout?plan=modus&cadence=monthly&from=start';
     return picked ? `/onboarding?${picked}` : '/onboarding';
   }
+}
+
+// Instagram and Facebook open links in their own in-app browser, where Google
+// refuses OAuth sign-in. Apple and the email link both work there.
+function isMetaInAppBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /Instagram|FBAN|FBAV/.test(navigator.userAgent);
 }
 
 const googleProvider = new GoogleAuthProvider();
@@ -125,9 +164,15 @@ export default function LoginPage() {
   const [browserAuth, setBrowserAuth] = useState(false);
   const [waiting, setWaiting] = useState(false);
   const [inApp, setInApp] = useState(false);
+  // Inside the Instagram or Facebook app: Apple and email go first, plus a note.
+  const [metaApp, setMetaApp] = useState(false);
 
   useEffect(() => {
     setIsDesktop(typeof navigator !== 'undefined' && navigator.userAgent.includes('MODUSDesktop'));
+    setMetaApp(isMetaInAppBrowser());
+    // The $1 offer travels in the link (promo=ONEDOLLAR from /start). Save it
+    // for checkout, but only the real code while the offer is running.
+    if (isLiveDollarCode(new URLSearchParams(window.location.search).get('promo'))) rememberDollarOffer();
     setBrowserAuth(desktopAuth() !== null);
     if (new URLSearchParams(window.location.search).get('error') === 'desktop') {
       setError('That sign in did not finish. Please try again.');
@@ -262,8 +307,14 @@ export default function LoginPage() {
     if (!addr) return;
     setError(''); setLoading('email');
     try {
-      const next = safeNext();
-      const url = `${window.location.origin}/login${next ? `?next=${encodeURIComponent(next)}` : ''}`;
+      const here = new URLSearchParams(window.location.search);
+      const keep = new URLSearchParams();
+      for (const k of CARRIED_PARAMS) {
+        const v = k === 'next' ? safeNext() : here.get(k)?.slice(0, 100);
+        if (v) keep.set(k, v);
+      }
+      const qs = keep.toString();
+      const url = `${window.location.origin}/login${qs ? `?${qs}` : ''}`;
       await sendSignInLinkToEmail(auth, addr, { url, handleCodeInApp: true });
       try { localStorage.setItem(EMAIL_KEY, addr); } catch { /* storage blocked */ }
       setEmailSent(true);
@@ -364,6 +415,115 @@ export default function LoginPage() {
                   {error && <p className="text-red-400 text-xs text-center mt-4">{error}</p>}
                 </div>
               ) : (<>
+              {metaApp ? (
+                <>
+                  <p className="text-xs text-muted text-center leading-relaxed mb-4">
+                    Google sign-in doesn&apos;t work inside Instagram or Facebook. Use Apple or email, or open this page in your browser.
+                  </p>
+                  <div className="space-y-3">
+                <button
+                  onClick={() => signIn('apple')}
+                  disabled={loading !== null}
+                  className="w-full flex items-center justify-center gap-3 bg-bg/60 border border-border hover:border-brand/50 rounded-xl px-4 py-3.5 text-text text-sm font-medium transition-all hover-surface-tint disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loading === 'apple' ? (
+                    <div className="w-4 h-4 rounded-full border-2 border-brand border-t-transparent animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4 fill-text shrink-0" viewBox="0 0 24 24">
+                      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+                    </svg>
+                  )}
+                  Continue with Apple
+                </button>
+                  </div>
+              {emailSent ? (
+                <div className="mt-6 text-center">
+                  <p className="text-text text-sm font-medium">Check your email</p>
+                  <p className="text-muted text-xs mt-1.5 leading-relaxed">
+                    We emailed a link to {email.trim()}. Open it to finish signing in.
+                  </p>
+                  <button
+                    onClick={() => { setEmailSent(false); setEmail(''); }}
+                    className="text-brand text-xs mt-3 hover:underline"
+                  >
+                    Use a different email
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3 my-5">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-muted/70 text-[11px] font-medium tracking-wider">OR</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+
+                  <form onSubmit={signInEmail} className="space-y-3">
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="Enter your email"
+                      autoComplete="email"
+                      disabled={loading !== null}
+                      className="w-full bg-bg/60 border border-border focus:border-brand/60 rounded-xl px-4 py-3.5 text-text text-sm placeholder:text-muted/60 outline-none transition-colors disabled:opacity-60"
+                    />
+                    <button
+                      type="submit"
+                      disabled={loading !== null || !email.trim()}
+                      className="w-full flex items-center justify-center gap-2 bg-brand hover:bg-brand/90 text-white rounded-xl px-4 py-3.5 text-sm font-semibold transition-colors disabled:bg-border disabled:text-muted disabled:cursor-not-allowed"
+                    >
+                      {loading === 'email' ? (
+                        <div className="w-4 h-4 rounded-full border-2 border-white/60 border-t-transparent animate-spin" />
+                      ) : 'Continue with email'}
+                    </button>
+                  </form>
+                </>
+              )}
+
+                  <div className="flex items-center gap-3 my-5">
+                    <div className="h-px flex-1 bg-border" />
+                    <span className="text-muted/70 text-[11px] font-medium tracking-wider">OR</span>
+                    <div className="h-px flex-1 bg-border" />
+                  </div>
+                  <div className="space-y-3">
+                <button
+                  onClick={() => signIn('google')}
+                  disabled={loading !== null}
+                  className="w-full flex items-center justify-center gap-3 bg-bg/60 border border-border hover:border-brand/50 rounded-xl px-4 py-3.5 text-text text-sm font-medium transition-all hover-surface-tint disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loading === 'google' ? (
+                    <div className="w-4 h-4 rounded-full border-2 border-brand border-t-transparent animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+                    </svg>
+                  )}
+                  Continue with Google
+                </button>
+                <button
+                  onClick={() => signIn('microsoft')}
+                  disabled={loading !== null}
+                  className="w-full flex items-center justify-center gap-3 bg-bg/60 border border-border hover:border-brand/50 rounded-xl px-4 py-3.5 text-text text-sm font-medium transition-all hover-surface-tint disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {loading === 'microsoft' ? (
+                    <div className="w-4 h-4 rounded-full border-2 border-brand border-t-transparent animate-spin" />
+                  ) : (
+                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23">
+                      <path fill="#f25022" d="M1 1h10v10H1z"/>
+                      <path fill="#7fba00" d="M12 1h10v10H12z"/>
+                      <path fill="#00a4ef" d="M1 12h10v10H1z"/>
+                      <path fill="#ffb900" d="M12 12h10v10H12z"/>
+                    </svg>
+                  )}
+                  Continue with Microsoft
+                </button>
+                  </div>
+                </>
+              ) : (
+                <>
               <div className="space-y-3">
                 <button
                   onClick={() => signIn('google')}
@@ -382,7 +542,6 @@ export default function LoginPage() {
                   )}
                   Continue with Google
                 </button>
-
                 <button
                   onClick={() => signIn('microsoft')}
                   disabled={loading !== null}
@@ -400,7 +559,6 @@ export default function LoginPage() {
                   )}
                   Continue with Microsoft
                 </button>
-
                 <button
                   onClick={() => signIn('apple')}
                   disabled={loading !== null}
@@ -458,6 +616,9 @@ export default function LoginPage() {
                       ) : 'Continue with email'}
                     </button>
                   </form>
+                </>
+              )}
+
                 </>
               )}
 

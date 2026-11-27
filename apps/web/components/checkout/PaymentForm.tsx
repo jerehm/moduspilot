@@ -15,10 +15,13 @@ export default function PaymentForm({
   planName,
   dueToday,
   cadence,
+  onDollarApplied,
 }: {
   planName: string;
   dueToday: number;
   cadence: Cadence;
+  /** Told whether the $1 offer is applied to this session, so the summary can say so. */
+  onDollarApplied?: (applied: boolean) => void;
 }) {
   const result = useCheckoutElements();
   const [paying, setPaying] = useState(false);
@@ -48,6 +51,12 @@ export default function PaymentForm({
       }
     }).catch(() => { /* leave the manual promo box as it was */ }).finally(() => setPromoBusy(false));
   }, [result, planName, cadence]);
+
+  // Applied = Stripe's session carries the $1 promotion code, on MODUS monthly.
+  const dollarApplied = result.type === 'success'
+    && cadence === 'monthly'
+    && !!result.checkout.discountAmounts?.some(d => d.promotionCode?.toUpperCase() === DOLLAR_OFFER.code);
+  useEffect(() => { onDollarApplied?.(dollarApplied); }, [dollarApplied, onDollarApplied]);
 
   if (result.type === 'loading') {
     return (
@@ -154,6 +163,11 @@ export default function PaymentForm({
           <span>Due today</span>
           <span>{total}</span>
         </div>
+        {dollarApplied && (
+          <p className="text-sm text-text pt-1">
+            ${DOLLAR_OFFER.firstMonth} today, then ${dueToday} a month. Cancel anytime.
+          </p>
+        )}
       </div>
 
       {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400 mt-4">{error}</p>}

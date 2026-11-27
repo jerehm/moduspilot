@@ -1,6 +1,17 @@
 import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
+// Text only. The emoji read as clip-art next to a serif headline.
+export const ROLE_OPTIONS = ['Founder / builder', 'Executive / manager', 'Professional', 'Student', 'Other'];
+
+/** Vector-indexes the seeded memories. Supplementary: they are already saved, so failures are ignored. */
+export function indexOnboardingMemories(getToken: () => Promise<string>, memories: string[]): void {
+  if (memories.length === 0) return;
+  void getToken().then(token => Promise.all(memories.map(text => fetch('/api/memory/upsert', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify({ text }),
+  })))).catch(() => {});
+}
+
 export async function seedOnboardingAccount(uid: string, { name, role, age, gender }: { name: string; role: string; age: string; gender: string }): Promise<string[]> {
   const ref = doc(db, 'users', uid);
   const roleLabel = role.trim() || 'Other';
