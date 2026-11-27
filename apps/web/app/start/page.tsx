@@ -73,8 +73,8 @@ const BRANDS: Brand[] = [
   { provider: 'Meta', name: 'Llama', logo: MetaLogo },
   { provider: 'xAI', name: 'Grok', logo: GrokLogo },
 ];
-// Announced but not in the catalog yet: shown with a "Soon" tag. Drops off by
-// itself once lib/models.ts gives MODUS a model from this provider.
+// Announced but not in the catalog yet. Shown as a normal chip (owner's call,
+// Nov 26 2026: Grok is being added soon). Remove from here if that changes.
 const COMING_SOON = ['xAI'];
 
 const UTM_KEYS = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
@@ -169,10 +169,7 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
   const modelList = unlockedModels('modus');
   const models = modelList.map(m => m.name);
   const providers = new Set(modelList.map(m => m.provider));
-  const brands = BRANDS.filter(b => providers.has(b.provider) || COMING_SOON.includes(b.provider)).map(b => ({
-    ...b,
-    soon: !providers.has(b.provider),
-  }));
+  const brands = BRANDS.filter(b => providers.has(b.provider) || COMING_SOON.includes(b.provider));
   const features = planCopy('modus').features;
   const example = COMPARE_PROMPTS[0];
 
@@ -247,13 +244,9 @@ export default async function StartPage({ searchParams }: { searchParams: Promis
               {brands.map(b => {
                 const Logo = b.logo;
                 return (
-                  <li
-                    key={b.provider}
-                    className={`inline-flex items-center gap-1.5 text-sm rounded-full border border-border px-3.5 py-1.5 ${b.soon ? 'text-muted' : 'bg-panel'}`}
-                  >
+                  <li key={b.provider} className="inline-flex items-center gap-1.5 text-sm rounded-full border border-border bg-panel px-3.5 py-1.5">
                     <Logo className="w-4 h-4" />
                     {b.name}
-                    {b.soon && <span className="text-[10px] font-semibold uppercase tracking-wider text-brand">Soon</span>}
                   </li>
                 );
               })}
